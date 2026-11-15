@@ -45,7 +45,7 @@ export function SiteFooter() {
           <div className="lg:col-span-2">
             <LandingAnchor
               href="#inicio"
-              className="cursor-pointer text-[28px] leading-none font-bold text-foreground"
+              className="cursor-pointer text-[28px] leading-none font-bold text-foreground transition-colors duration-150 ease-out hover:text-teal-700"
             >
               {footer.wordmark}
             </LandingAnchor>
@@ -71,7 +71,7 @@ export function SiteFooter() {
           {privacyHref ? (
             <a
               href={privacyHref}
-              className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-teal-700"
+              className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-teal-700 underline-offset-4 transition-colors duration-150 ease-out hover:text-teal-600 hover:underline"
             >
               {footer.privacy}
             </a>

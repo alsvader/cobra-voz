@@ -38,7 +38,7 @@ export function MobileNavigation() {
       <button
         ref={buttonRef}
         type="button"
-        className="inline-flex size-11 cursor-pointer items-center justify-center rounded-md border border-border bg-surface text-foreground"
+        className="inline-flex size-11 cursor-pointer items-center justify-center rounded-md border border-border bg-surface text-foreground transition-colors duration-150 ease-out hover:border-teal-600 hover:bg-teal-100"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((current) => !current)}
@@ -61,7 +61,7 @@ export function MobileNavigation() {
               <li key={link.href}>
                 <LandingAnchor
                   href={link.href}
-                  className="flex min-h-11 cursor-pointer items-center text-base font-medium text-foreground"
+                  className="flex min-h-11 cursor-pointer items-center text-base font-medium text-foreground transition-colors duration-150 ease-out hover:text-teal-700"
                   onNavigate={() => setOpen(false)}
                 >
                   {link.label}

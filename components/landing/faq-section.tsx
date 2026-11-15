@@ -37,13 +37,13 @@ export function FAQSection() {
                 <button
                   id={buttonId}
                   type="button"
-                  className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-4 py-3 text-left text-base font-semibold text-foreground lg:text-lg"
+                  className="group flex min-h-11 w-full cursor-pointer items-center justify-between gap-4 py-3 text-left text-base font-semibold text-foreground transition-colors duration-150 ease-out hover:text-teal-700 lg:text-lg"
                   aria-expanded={open}
                   aria-controls={panelId}
                   onClick={() => setOpenId(open ? null : item.id)}
                 >
                   <span>{item.question}</span>
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700 transition-colors duration-150 ease-out group-hover:bg-primary group-hover:text-white">
                     {open ? (
                       <Minus aria-hidden="true" className="size-4" />
                     ) : (

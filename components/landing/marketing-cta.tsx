@@ -17,7 +17,7 @@ const variantClass = {
   primary:
     "w-full bg-primary text-primary-foreground hover:bg-teal-700 lg:w-auto",
   secondary:
-    "w-full border border-border bg-surface text-teal-700 hover:bg-muted lg:w-auto",
+    "w-full border border-border bg-surface text-teal-700 hover:border-teal-600 hover:bg-teal-100 lg:w-auto",
   inverse: "w-full bg-surface text-teal-700 hover:bg-teal-100 lg:w-auto",
 } as const;
 
