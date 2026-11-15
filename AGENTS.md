@@ -12,4 +12,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 Cada decisión, convención, bug con causa o descubrimiento no obvio se guarda en Engram en el momento, sin esperar a que lo pidan. La regla completa está en `.cursor/rules/engram-memory.mdc`.
 
-El proyecto de Engram es `alsvader` (`.engram/config.json`). No uses `cobra-voz`, aunque el directorio lo sugiera: ahí no está el historial. Mismo tema, mismo `topic_key`. Sin secretos en el contenido.
+El proyecto de Engram de este repo es `cobra-voz` (`.engram/config.json`). Busca y guarda solo ahí: no leas `alsvader` ni el historial de otros proyectos. Mismo tema, mismo `topic_key`. Sin secretos en el contenido.

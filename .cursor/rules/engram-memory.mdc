@@ -1,18 +1,18 @@
 ---
-description: Guardar en Engram cada decisión, convención y descubrimiento de CobraVoz
+description: Guardar en Engram solo las decisiones de este repositorio
 alwaysApply: true
 ---
 
 # Memoria Engram
 
-Engram es la memoria de este repositorio. No esperes a que te lo pidan.
+Engram de este repositorio es el proyecto `cobra-voz`, fijado en `.engram/config.json`. No esperes a que te lo pidan.
 
-El proyecto es `alsvader`, fijado en `.engram/config.json`. `mem_current_project` puede decir `cobra-voz` por el remoto de git: no guardes ahí. Ese nombre no tiene historial y parte la memoria. Busca y guarda solo en `alsvader`.
+Busca y guarda solo ahí. En `mem_context`, `mem_search` y `mem_save` pasa siempre `project: "cobra-voz"`. No omitas el proyecto, no uses `all_projects` y no leas `alsvader`, `lealtab` ni `codewithaaron`: esos historiales no son de este repo. `alsvader` mezcla CobraVoz con otros trabajos de la carpeta personal.
 
-Al empezar una sesión llama `mem_context` y `mem_search` (decisiones de CobraVoz, el PR o el tema) antes de rehacer trabajo ya hecho. El registro vigente es `cobravoz/standing-decisions`.
+Al empezar, busca el tema o el PR. El registro vigente es `cobravoz/standing-decisions`.
 
-Después de una decisión, convención, preferencia confirmada o rechazada, bug con causa, descubrimiento no obvio o un PR terminado, llama `mem_save` con `project: "alsvader"`. Mismo tema, mismo `topic_key` (`cobravoz/...`). Temas distintos, claves distintas. Si pide juicio, resuélvelo con `mem_judge` o `mem_judge_many`.
+Después de una decisión, convención, preferencia confirmada o rechazada, bug con causa, descubrimiento no obvio o un PR terminado, llama `mem_save` con ese proyecto. Mismo tema, mismo `topic_key` (`cobravoz/...`). Temas distintos, claves distintas. Si pide juicio, resuélvelo con `mem_judge` o `mem_judge_many`.
 
 `content`: **What**, **Why**, **Where** (rutas del repo, sin rutas absolutas), **Learned**. Sin secretos, tokens ni datos bancarios.
 
-Al cerrar la sesión, `mem_session_summary` con `project: "alsvader"`.
+Al cerrar la sesión, `mem_session_summary` con `project: "cobra-voz"`.
