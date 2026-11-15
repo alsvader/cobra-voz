@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CobraVoz
 
-## Getting Started
+PWA para que pequeños comerciantes de México cobren con CoDi dictando el
+importe. Cobra fácilmente, sin dejar de atender tu negocio.
 
-First, run the development server:
+La fuente de verdad está en [`docs/`](docs): PRD, UX, arquitectura, `DESIGN.md`
+e `IMPLEMENTATION_PLAN.md` (orden de trabajo por hitos y PR).
+
+## Requisitos
+
+- Node.js ≥ 22 (desarrollado con 24) y npm.
+
+## Empezar
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # sin secretos en el repo
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Script                            | Qué hace                                                   |
+| --------------------------------- | ---------------------------------------------------------- |
+| `npm run dev` / `build` / `start` | Next.js                                                    |
+| `npm run lint`                    | ESLint                                                     |
+| `npm run typecheck`               | Genera tipos de rutas y ejecuta `tsc --noEmit`             |
+| `npm run test`                    | Pruebas unitarias y de componentes (Vitest)                |
+| `npm run e2e`                     | E2E con Playwright contra el build (`npm run build` antes) |
+| `npm run format` / `format:check` | Prettier                                                   |
+| `npm run icons`                   | Regenera los iconos temporales de la PWA                   |
+| `npm run check`                   | `lint` + `typecheck` + `test`                              |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+La primera vez que se corran los E2E: `npx playwright install chromium`
+(y `webkit` con `E2E_WEBKIT=1` para Safari iOS).
 
-## Learn More
+## Estructura
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/          Rutas (App Router): landing `/` y aplicación del comerciante `/inicio`
+components/   UI genérica (shadcn/ui + componentes de DESIGN.md) y PWA
+lib/          Utilidades y configuración pública
+modules/      Dominios del monolito modular (identity, merchant, voice, charges, ...)
+adapters/     Infraestructura externa (db, pey, stt), solo servidor
+e2e/          Pruebas Playwright
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Reglas que no se negocian
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Dinero en centavos enteros; nunca `float` en el dominio.
+- Un pago solo es «Pagado» con evidencia bancaria verificada en backend.
+- Nunca se crea un QR ni se confirma un pago a partir de la transcripción de voz.
+- Claves de Pey, OpenAI y base de datos solo en servidor (jamás `NEXT_PUBLIC_*`).
+- El adaptador Pey simulado solo existe en Local/Preview.

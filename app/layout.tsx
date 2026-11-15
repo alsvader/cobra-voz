@@ -1,15 +1,14 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { DM_Sans } from "next/font/google";
+import { OfflineBanner } from "@/components/ui/offline-banner";
+import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -18,15 +17,33 @@ export const metadata: Metadata = {
     template: "%s · CobraVoz",
   },
   description: "Cobra fácilmente, sin dejar de atender tu negocio.",
+  applicationName: "CobraVoz",
+  appleWebApp: {
+    capable: true,
+    title: "CobraVoz",
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#107B75",
+  colorScheme: "light",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="es-MX"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="es-MX" className={`${dmSans.variable} h-full`}>
+      <body className="flex min-h-full flex-col">
+        <OfflineBanner />
+        {children}
+        <ServiceWorkerRegistration />
+      </body>
     </html>
   );
 }

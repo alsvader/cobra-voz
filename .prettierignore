@@ -1,0 +1,8 @@
+node_modules
+.next
+.agents
+docs
+package-lock.json
+public
+skills-lock.json
+open-ai.md
