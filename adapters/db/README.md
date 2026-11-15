@@ -69,14 +69,22 @@ CI falla si el esquema cambia sin su migración.
 «Generando QR» y «Verificación no disponible» **no** se persisten: son estados
 de interfaz/comunicación. Las transiciones se implementan en PR-05 a PR-08.
 
-Implementadas hasta ahora (`modules/charges`, PR-05):
+Implementadas hasta ahora (`modules/charges`, PR-05 y PR-06):
 
 - `created` → `waiting_payment`: solo con un QR real y válido; la fila `codi_qrs`
   y el estado se escriben en la misma transacción.
 - `created` → `qr_uncertain` (+ incidencia `qr_creation_uncertain` abierta): Pey
   no confirmó el QR, la respuesta no es válida o el QR no pudo persistirse.
   También si un cobro queda en `created` más de 60 s sin resolver.
+- `waiting_payment` → `expired`: el servidor lo aplica al leer el cobro cuando
+  `expires_at <= ahora` (UPDATE condicional al estado). No equivale a «pago
+  rechazado»; el QR y el cobro se conservan para un posible pago tardío.
+- `waiting_payment` → `locally_closed` (`closed_at` = ahora): «Cerrar cobro»,
+  solo desde `waiting_payment` y con UPDATE condicional (si llegó un pago en
+  paralelo, gana el pago). Cierre local: no cancela nada en el banco.
 - Nunca se reintenta la creación del QR por cuenta propia.
+- `paid` (y la llegada de pagos tardíos a `expired`/`locally_closed`) se
+  implementa en PR-07.
 
 ## Seguridad
 

@@ -13,6 +13,7 @@ import {
   merchants,
   merchantUsers,
   paymentIncidents,
+  payments,
 } from "../../adapters/db/schema";
 import { assertLocalDatabase } from "../../scripts/db/local-guard";
 import {
@@ -102,6 +103,23 @@ export async function deleteTenant(tenant: Tenant): Promise<void> {
       await db
         .delete(paymentIncidents)
         .where(inArray(paymentIncidents.chargeId, chargeIds));
+      const qrRows = await db
+        .select({ id: codiQrs.id })
+        .from(codiQrs)
+        .where(inArray(codiQrs.chargeId, chargeIds));
+      // charges → payments → codi_qrs → charges: se rompe el ciclo primero.
+      await db
+        .update(charges)
+        .set({ status: "created", paidPaymentId: null })
+        .where(inArray(charges.id, chargeIds));
+      if (qrRows.length > 0) {
+        await db.delete(payments).where(
+          inArray(
+            payments.codiQrId,
+            qrRows.map((row) => row.id),
+          ),
+        );
+      }
       await db.delete(codiQrs).where(inArray(codiQrs.chargeId, chargeIds));
       await db.delete(charges).where(inArray(charges.id, chargeIds));
     }
@@ -148,6 +166,79 @@ export async function readCharges(merchantId: string) {
           .where(inArray(paymentIncidents.chargeId, ids))
       : [];
     return { charges: rows, qrs, incidents };
+  } finally {
+    await close();
+  }
+}
+
+/** Cobro sin resolver (`created`), opcionalmente «antiguo», para probar la recuperación. */
+export async function insertCreatedCharge(
+  merchantId: string,
+  options: { createdAt?: Date } = {},
+): Promise<string> {
+  const { db, close } = connect();
+  try {
+    const [row] = await db
+      .insert(charges)
+      .values({
+        merchantId,
+        amountCents: 9900,
+        idempotencyKey: randomUUID(),
+        ...(options.createdAt ? { createdAt: options.createdAt } : {}),
+      })
+      .returning({ id: charges.id });
+    return row.id;
+  } finally {
+    await close();
+  }
+}
+
+/** Simula el paso del tiempo: vence (o no) el cobro modificando `expires_at`. */
+export async function setChargeExpiry(
+  chargeId: string,
+  expiresAt: Date,
+): Promise<void> {
+  const { db, close } = connect();
+  try {
+    await db.update(charges).set({ expiresAt }).where(eq(charges.id, chargeId));
+  } finally {
+    await close();
+  }
+}
+
+/**
+ * Deja el cobro como `paid` con un pago verificado asociado, tal como lo
+ * dejaría el webhook de PR-07. Solo prepara el estado persistido para comprobar
+ * que P03 lo refleja; la pantalla nunca lo decide.
+ */
+export async function markChargePaid(chargeId: string): Promise<void> {
+  const { db, close } = connect();
+  try {
+    const [qr] = await db
+      .select()
+      .from(codiQrs)
+      .where(eq(codiQrs.chargeId, chargeId));
+    const [charge] = await db
+      .select({ amountCents: charges.amountCents })
+      .from(charges)
+      .where(eq(charges.id, chargeId));
+    const now = new Date();
+    const [payment] = await db
+      .insert(payments)
+      .values({
+        codiQrId: qr.id,
+        providerTransactionId: `e2e-tx-${randomUUID()}`,
+        amountCents: charge.amountCents,
+        reconciliationStatus: "reconciled",
+        evidenceSource: "webhook",
+        paidAt: now,
+        reconciledAt: now,
+      })
+      .returning({ id: payments.id });
+    await db
+      .update(charges)
+      .set({ status: "paid", paidPaymentId: payment.id })
+      .where(eq(charges.id, chargeId));
   } finally {
     await close();
   }

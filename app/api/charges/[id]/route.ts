@@ -9,6 +9,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 /**
  * GET /api/charges/:id — estado actual del cobro, con QR si existe. Solo del
  * comercio de la sesión: un cobro ajeno responde 404, igual que uno inexistente.
+ * `serverTime` permite mostrar el tiempo restante sin depender del reloj del
+ * dispositivo. Al leer, el servidor aplica el vencimiento por tiempo.
  */
 export const GET = withMerchantApi<RouteContext>(
   async (_request, { merchantId }, { params }) => {
@@ -21,6 +23,6 @@ export const GET = withMerchantApi<RouteContext>(
     if (!charge) {
       return errorJson(404, "not_found", "No encontramos ese cobro.");
     }
-    return privateJson({ charge });
+    return privateJson({ charge, serverTime: new Date().toISOString() });
   },
 );

@@ -1,27 +1,24 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   AmountConfirmation,
   type ConfirmResult,
 } from "@/components/charge/amount-confirmation";
-import { Notice } from "@/components/ui/notice";
-import { formatMxn } from "@/modules/charges/amount";
 import { newIdempotencyKey, submitCharge } from "@/modules/charges/client";
-import type { ChargeDto } from "@/modules/charges/types";
-import { ROUTES, loginUrl } from "@/lib/routes";
+import { ROUTES, chargePath, loginUrl } from "@/lib/routes";
 
 /**
- * Cuerpo de P02 en la app. Al confirmar, envía el importe a `POST /api/charges`.
+ * Cuerpo de P02 en la app. Al confirmar, envía el importe a `POST /api/charges`
+ * y pasa a P03 (`/cobro/[id]`), que muestra el estado REAL del cobro.
  *
  * La clave de idempotencia identifica la INTENCIÓN: se conserva mientras el
  * importe no cambie (doble clic, corte de red, reintento) y se renueva si la
  * persona confirma otro importe, que es una intención nueva (RN-05, RN-07).
  *
- * PUNTO DE UNIÓN (PR-06): P03 (QR, estados, expiración y cierre) aún no existe.
- * Cuando exista, un cobro creado navegará a `/cobro/[id]`; hasta entonces solo
- * se informa su estado real. Nunca se muestra un QR en esta pantalla.
+ * Se navega con `replace`: «atrás» desde P03 no vuelve a un P02 ya confirmado.
+ * Este componente nunca dibuja un QR ni anuncia un resultado de pago.
  */
 export function ConfirmAmountScreen({
   initialCents,
@@ -29,7 +26,6 @@ export function ConfirmAmountScreen({
   initialCents: number | null;
 }) {
   const router = useRouter();
-  const [charge, setCharge] = useState<ChargeDto | null>(null);
   const intention = useRef<{ key: string; cents: number } | null>(null);
 
   async function handleConfirm(cents: number): Promise<ConfirmResult> {
@@ -55,40 +51,15 @@ export function ConfirmAmountScreen({
       return { status: "error", message: result.message };
     }
 
-    setCharge(result.charge);
+    router.replace(chargePath(result.charge.id));
     return { status: "accepted" };
   }
 
   return (
-    <>
-      <AmountConfirmation
-        initialCents={initialCents}
-        onConfirm={handleConfirm}
-        onCancel={() => router.push(ROUTES.app)}
-      />
-      {charge ? <ChargeCreatedNotice charge={charge} /> : null}
-    </>
-  );
-}
-
-function ChargeCreatedNotice({ charge }: { charge: ChargeDto }) {
-  const amount = formatMxn(charge.amountCents);
-
-  if (charge.status === "qr_uncertain") {
-    return (
-      <Notice tone="warning" label="No pudimos confirmar el QR">
-        No sabemos si se generó el QR de {amount}. Guarda la referencia{" "}
-        <strong>{charge.reference}</strong>. No se creó ningún cobro adicional y
-        no repetiremos la solicitud por tu cuenta.
-      </Notice>
-    );
-  }
-
-  return (
-    <Notice tone="info" label="Cobro creado">
-      Se creó el cobro <strong>{charge.reference}</strong> por {amount}
-      {charge.qr?.simulated ? " (QR de prueba)" : ""}. La pantalla que muestra
-      el QR llega en el siguiente avance; todavía no hay ningún pago registrado.
-    </Notice>
+    <AmountConfirmation
+      initialCents={initialCents}
+      onConfirm={handleConfirm}
+      onCancel={() => router.push(ROUTES.app)}
+    />
   );
 }

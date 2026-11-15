@@ -133,7 +133,7 @@ export function AmountConfirmation({
       <div className="flex flex-col gap-3">
         <Button type="submit" disabled={locked || cents === null}>
           {phase === "pending"
-            ? "Confirmando…"
+            ? "Generando código…"
             : phase === "accepted"
               ? "Importe confirmado"
               : "Confirmar importe"}

@@ -8,7 +8,7 @@ const AMOUNT_FIELD = /Importe a cobrar \(MXN\)/;
 const newKey = () => crypto.randomUUID();
 
 test.describe("P02 → creación de cobro", () => {
-  test("confirmar crea un cobro con QR de prueba y lo informa sin mostrar un QR", async ({
+  test("confirmar crea un cobro y abre P03 con el QR de prueba", async ({
     page,
     tenant,
   }) => {
@@ -17,12 +17,12 @@ test.describe("P02 → creación de cobro", () => {
     await page.getByLabel(AMOUNT_FIELD).fill("150.50");
     await page.getByRole("button", { name: "Confirmar importe" }).click();
 
-    await expect(page.getByText(/Se creó el cobro/)).toBeVisible();
+    await expect(page).toHaveURL(/\/cobro\/[0-9a-f-]{36}$/);
+    await expect(page.getByText("Esperando pago")).toBeVisible();
     await expect(page.getByText(/CV-[0-9A-F]{8}/)).toBeVisible();
     await expect(page.getByText(/QR de prueba/)).toBeVisible();
-    // Aún no hay P03: nada de QR ni de «pagado».
-    await expect(page.getByRole("img")).toHaveCount(0);
-    await expect(page.getByText(/pago recibido|pagado/i)).toHaveCount(0);
+    await expect(page.getByTestId("codi-qr")).toBeVisible();
+    await expect(page.getByText(/pago recibido/i)).toHaveCount(0);
 
     const { charges, qrs } = await readCharges(tenant.merchantId!);
     expect(charges).toHaveLength(1);
@@ -41,7 +41,7 @@ test.describe("P02 → creación de cobro", () => {
     const confirm = page.getByRole("button", { name: "Confirmar importe" });
 
     await confirm.dblclick();
-    await expect(page.getByText(/Se creó el cobro/)).toBeVisible();
+    await expect(page).toHaveURL(/\/cobro\/[0-9a-f-]{36}$/);
 
     expect((await readCharges(tenant.merchantId!)).charges).toHaveLength(1);
   });
@@ -69,7 +69,7 @@ test.describe("P02 → creación de cobro", () => {
     await expect(page.getByText(/no se duplicará/i)).toBeVisible();
     await page.getByRole("button", { name: "Confirmar importe" }).click();
 
-    await expect(page.getByText(/Se creó el cobro/)).toBeVisible();
+    await expect(page).toHaveURL(/\/cobro\/[0-9a-f-]{36}$/);
     expect((await readCharges(tenant.merchantId!)).charges).toHaveLength(1);
   });
 
@@ -88,7 +88,7 @@ test.describe("P02 → creación de cobro", () => {
     await page.getByLabel(AMOUNT_FIELD).fill("200");
     await page.getByRole("button", { name: "Confirmar importe" }).click();
 
-    await expect(page.getByText(/Se creó el cobro/)).toBeVisible();
+    await expect(page).toHaveURL(/\/cobro\/[0-9a-f-]{36}$/);
     const { charges } = await readCharges(tenant.merchantId!);
     expect(charges).toHaveLength(1);
     expect(charges[0].amountCents).toBe(20000);
@@ -105,10 +105,10 @@ test.describe("P02 → creación de cobro", () => {
     await page.getByRole("button", { name: "Confirmar importe" }).click();
 
     await expect(page.getByText("No pudimos confirmar el QR")).toBeVisible();
-    await expect(
-      page.getByText(/No se creó ningún cobro adicional/),
-    ).toBeVisible();
-    await expect(page.getByText(/Se creó el cobro/)).toHaveCount(0);
+    await expect(page.getByText(/no repetiremos la solicitud/)).toBeVisible();
+    await expect(page).toHaveURL(/\/cobro\/[0-9a-f-]{36}$/);
+    await expect(page.getByTestId("codi-qr")).toHaveCount(0);
+    await expect(page.getByText("Esperando pago")).toHaveCount(0);
 
     const { charges, qrs, incidents } = await readCharges(tenant.merchantId!);
     expect(charges).toHaveLength(1);

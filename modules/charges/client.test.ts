@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { newIdempotencyKey, submitCharge } from "./client";
+import {
+  fetchCharge,
+  newIdempotencyKey,
+  requestCloseCharge,
+  submitCharge,
+} from "./client";
 import { idempotencyKeySchema } from "./schemas";
 import type { ChargeDto } from "./types";
 
@@ -94,5 +99,91 @@ describe("submitCharge", () => {
   it("una respuesta 200 sin cobro se trata como error, no como éxito", async () => {
     const result = await submitCharge(input, respond(200, {}) as never);
     expect(result.kind).toBe("error");
+  });
+});
+
+const SERVER_TIME = "2026-11-15T12:01:00.000Z";
+
+describe("fetchCharge", () => {
+  it("lee el cobro por GET sin caché y devuelve la hora del servidor", async () => {
+    const fetchMock = respond(200, { charge, serverTime: SERVER_TIME });
+
+    const result = await fetchCharge(charge.id, fetchMock as never);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/charges/${charge.id}`,
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(result).toEqual({
+      kind: "ok",
+      charge,
+      serverTime: Date.parse(SERVER_TIME),
+    });
+  });
+
+  it("401 → sesión vencida; 404 → no encontrado", async () => {
+    expect(await fetchCharge(charge.id, respond(401) as never)).toEqual({
+      kind: "unauthenticated",
+    });
+    expect(await fetchCharge(charge.id, respond(404) as never)).toEqual({
+      kind: "not_found",
+    });
+  });
+
+  it("sin red, error del servidor o respuesta sin cobro = verificación no disponible", async () => {
+    const failing = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    expect(await fetchCharge(charge.id, failing as never)).toEqual({
+      kind: "unavailable",
+    });
+    expect(await fetchCharge(charge.id, respond(500) as never)).toEqual({
+      kind: "unavailable",
+    });
+    expect(await fetchCharge(charge.id, respond(200, {}) as never)).toEqual({
+      kind: "unavailable",
+    });
+  });
+});
+
+describe("requestCloseCharge", () => {
+  it("cierra por POST sin cuerpo y devuelve el cobro del servidor", async () => {
+    const closed = { ...charge, status: "locally_closed" as const };
+    const fetchMock = respond(200, { charge: closed, serverTime: SERVER_TIME });
+
+    const result = await requestCloseCharge(charge.id, fetchMock as never);
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/charges/${charge.id}/close`, {
+      method: "POST",
+    });
+    expect(result).toMatchObject({ kind: "ok", charge: closed });
+  });
+
+  it("409 devuelve el estado real (p. ej. pagado) en lugar de un error", async () => {
+    const paid = { ...charge, status: "paid" as const };
+    const result = await requestCloseCharge(
+      charge.id,
+      respond(409, { error: { code: "not_closable" }, charge: paid }) as never,
+    );
+    expect(result).toMatchObject({ kind: "not_closable", charge: paid });
+  });
+
+  it("401, 404 y fallos de red/servidor se distinguen y no se toman por cierre", async () => {
+    expect(await requestCloseCharge(charge.id, respond(401) as never)).toEqual({
+      kind: "unauthenticated",
+    });
+    expect(await requestCloseCharge(charge.id, respond(404) as never)).toEqual({
+      kind: "not_found",
+    });
+    for (const fetchImpl of [
+      respond(500),
+      respond(200, {}),
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    ]) {
+      const result = await requestCloseCharge(charge.id, fetchImpl as never);
+      expect(result.kind).toBe("error");
+    }
   });
 });

@@ -108,8 +108,11 @@ test.describe("P02 Confirmación del importe", () => {
     await field.fill("200");
     await expect(page.getByText("$200.00", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Confirmar importe" }).click();
+    // Con el importe corregido y confirmado, P03 muestra ESE importe.
+    await expect(page).toHaveURL(/\/cobro\/[0-9a-f-]{36}$/);
+    await expect(page.getByText("Esperando pago")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Importe confirmado" }),
+      page.getByRole("main").locator("visible=true").getByText("$200.00"),
     ).toBeVisible();
   });
 

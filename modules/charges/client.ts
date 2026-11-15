@@ -73,3 +73,91 @@ export async function submitCharge(
       return { kind: "error", message: MESSAGES.generic };
   }
 }
+
+function parseServerTime(value: unknown): number {
+  const parsed = typeof value === "string" ? Date.parse(value) : NaN;
+  return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+export type FetchChargeResult =
+  | { kind: "ok"; charge: ChargeDto; serverTime: number }
+  | { kind: "unauthenticated" }
+  | { kind: "not_found" }
+  /** Sin red o error del servidor: «verificación no disponible», no un rechazo. */
+  | { kind: "unavailable" };
+
+/**
+ * Lee el estado PERSISTIDO del cobro (P03). Es la única fuente de verdad: la
+ * pantalla nunca decide por sí sola que algo se pagó, venció o se cerró.
+ */
+export async function fetchCharge(
+  chargeId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<FetchChargeResult> {
+  let response: Response;
+  try {
+    response = await fetchImpl(`/api/charges/${chargeId}`, {
+      cache: "no-store",
+    });
+  } catch {
+    return { kind: "unavailable" };
+  }
+
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (response.status === 404) return { kind: "not_found" };
+  if (!response.ok) return { kind: "unavailable" };
+
+  const body = (await response.json().catch(() => null)) as {
+    charge?: ChargeDto;
+    serverTime?: string;
+  } | null;
+  if (!body?.charge) return { kind: "unavailable" };
+  return {
+    kind: "ok",
+    charge: body.charge,
+    serverTime: parseServerTime(body.serverTime),
+  };
+}
+
+export type CloseChargeClientResult =
+  | { kind: "ok"; charge: ChargeDto; serverTime: number }
+  /** Ya no era cerrable (p. ej. se pagó o venció): `charge` es el estado real. */
+  | { kind: "not_closable"; charge: ChargeDto; serverTime: number }
+  | { kind: "unauthenticated" }
+  | { kind: "not_found" }
+  | { kind: "error"; message: string };
+
+const CLOSE_FAILED =
+  "No pudimos cerrar el cobro. Revisa tu conexión e inténtalo de nuevo.";
+
+/** «Cerrar cobro»: cierre local; no cancela nada en el banco. */
+export async function requestCloseCharge(
+  chargeId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CloseChargeClientResult> {
+  let response: Response;
+  try {
+    response = await fetchImpl(`/api/charges/${chargeId}/close`, {
+      method: "POST",
+    });
+  } catch {
+    return { kind: "error", message: CLOSE_FAILED };
+  }
+
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (response.status === 404) return { kind: "not_found" };
+
+  const body = (await response.json().catch(() => null)) as {
+    charge?: ChargeDto;
+    serverTime?: string;
+  } | null;
+
+  if ((response.ok || response.status === 409) && body?.charge) {
+    return {
+      kind: response.ok ? "ok" : "not_closable",
+      charge: body.charge,
+      serverTime: parseServerTime(body.serverTime),
+    };
+  }
+  return { kind: "error", message: CLOSE_FAILED };
+}

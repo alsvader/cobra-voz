@@ -32,7 +32,7 @@ registro público, las cuentas se preconfiguran y se vinculan a un comercio).
 máx. 2 decimales, > 0). P02 (`/cobro/confirmar`) exige la acción explícita
 «Confirmar importe»; `?centavos=` se revalida siempre en el servidor.
 
-### Cobros (PR-05)
+### Cobros (PR-05) y pantalla P03 (PR-06)
 
 `POST /api/charges` crea la intención (idempotente por `idempotencyKey`, persistida
 **antes** de llamar a Pey) y `GET /api/charges/:id` la consulta. El `merchantId`
@@ -41,6 +41,22 @@ a llamar a Pey; si Pey no confirma el QR, el cobro queda en `qr_uncertain` y no 
 reintenta a ciegas. En Local/Preview responde el simulador (`adapters/pey`):
 importe **$13.01** fuerza un resultado incierto; en cualquier otro entorno la API
 responde 503 hasta integrar Pey real (H5).
+
+P03 (`/cobro/[id]`) es una sola pantalla con variantes según el estado **persistido**:
+generando QR, esperando pago (QR dibujado localmente desde el `qrString` guardado,
+importe, referencia y tiempo restante), verificación no disponible, pagado, expirado,
+cerrado localmente, QR incierto e incidencia. Reglas:
+
+- El estado sale siempre de `GET /api/charges/:id` (consulta periódica cada 5 s,
+  pausada con la pestaña oculta, más «Consultar nuevamente»). Ningún botón ni el
+  reloj del teléfono marcan un cobro como pagado, vencido o cerrado.
+- El vencimiento lo aplica el **servidor al leer** (`waiting_payment` con
+  `expires_at` pasado → `expired`); el tiempo restante se calcula con la hora del
+  servidor (`serverTime`). Vencer no borra el QR ni impide conciliar un pago tardío.
+- `POST /api/charges/:id/close` («Cerrar cobro») es un cierre **local**: solo desde
+  `waiting_payment`, idempotente, con aviso de que no cancela el pago bancario. Si el
+  cobro ya cambió (pagado, vencido) responde 409 con el estado real.
+- Un QR del simulador se rotula siempre «QR de prueba».
 
 ### Autenticación y autorización
 

@@ -6,6 +6,7 @@ import {
   codiQrs,
   merchants,
   paymentIncidents,
+  payments,
 } from "@/adapters/db/schema";
 import { createTestDb } from "@/adapters/db/testing";
 import {
@@ -14,7 +15,12 @@ import {
   createMockPeyAdapter,
 } from "@/adapters/pey/mock";
 import type { CreateQrOutcome, PeyAdapter } from "@/adapters/pey/types";
-import { STALE_CREATED_MS, createCharge, getCharge } from "./service";
+import {
+  STALE_CREATED_MS,
+  closeCharge,
+  createCharge,
+  getCharge,
+} from "./service";
 
 const { db, close } = createTestDb();
 const merchantIds: string[] = [];
@@ -61,6 +67,23 @@ afterEach(async () => {
     await db
       .delete(paymentIncidents)
       .where(inArray(paymentIncidents.chargeId, chargeIds));
+    const qrRows = await db
+      .select({ id: codiQrs.id })
+      .from(codiQrs)
+      .where(inArray(codiQrs.chargeId, chargeIds));
+    // charges → payments → codi_qrs → charges: se rompe el ciclo primero.
+    await db
+      .update(charges)
+      .set({ status: "created", paidPaymentId: null })
+      .where(inArray(charges.id, chargeIds));
+    if (qrRows.length > 0) {
+      await db.delete(payments).where(
+        inArray(
+          payments.codiQrId,
+          qrRows.map((row) => row.id),
+        ),
+      );
+    }
     await db.delete(codiQrs).where(inArray(codiQrs.chargeId, chargeIds));
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
@@ -575,5 +598,286 @@ describe("getCharge — alcance por comercio y cobros sin resolver", () => {
     expect(result.ok && result.charge.status).toBe("qr_uncertain");
     expect(result.ok && result.replayed).toBe(true);
     expect(pey.calls).toHaveLength(0);
+  });
+});
+
+/** Cobro `waiting_payment` creado a las 12:00 UTC con QR de prueba (600 s). */
+const T0 = new Date("2026-11-15T12:00:00Z");
+const at = (secondsAfterT0: number) =>
+  new Date(T0.getTime() + secondsAfterT0 * 1000);
+
+async function waitingCharge(merchantId: string) {
+  const result = await createCharge(
+    { db, pey: createMockPeyAdapter({ now: () => T0 }), now: () => T0 },
+    merchantId,
+    { amountCents: 15050, idempotencyKey: newKey() },
+  );
+  if (!result.ok || result.charge.status !== "waiting_payment") {
+    throw new Error("setup: se esperaba un cobro waiting_payment");
+  }
+  return result.charge;
+}
+
+/** Pago verificado asociado al QR (lo registrará PR-07; aquí solo prepara el estado). */
+async function insertPayment(codiQrId: string) {
+  const [payment] = await db
+    .insert(payments)
+    .values({
+      codiQrId,
+      providerTransactionId: `tx-${randomUUID()}`,
+      amountCents: 15050,
+      reconciliationStatus: "reconciled",
+      evidenceSource: "webhook",
+      paidAt: T0,
+      reconciledAt: T0,
+    })
+    .returning();
+  return payment;
+}
+
+async function rowOf(chargeId: string) {
+  const [row] = await db.select().from(charges).where(eq(charges.id, chargeId));
+  return row;
+}
+
+describe("vencimiento por tiempo (lo decide el servidor al leer)", () => {
+  it("antes de vencer sigue esperando pago, con su QR", async () => {
+    const merchant = await newMerchant();
+    const charge = await waitingCharge(merchant.id);
+
+    const found = await getCharge(
+      { db, now: () => at(599) },
+      merchant.id,
+      charge.id,
+    );
+
+    expect(found?.status).toBe("waiting_payment");
+    expect(found?.qr).not.toBeNull();
+  });
+
+  it("al llegar a expiresAt pasa a expired y queda persistido", async () => {
+    const merchant = await newMerchant();
+    const charge = await waitingCharge(merchant.id);
+
+    const found = await getCharge(
+      { db, now: () => at(600) },
+      merchant.id,
+      charge.id,
+    );
+
+    expect(found?.status).toBe("expired");
+    expect((await rowOf(charge.id)).status).toBe("expired");
+  });
+
+  it("expirar conserva el QR y el cobro: un pago tardío aún puede conciliarse", async () => {
+    const merchant = await newMerchant();
+    const charge = await waitingCharge(merchant.id);
+
+    await getCharge({ db, now: () => at(3600) }, merchant.id, charge.id);
+
+    const qrs = await db
+      .select()
+      .from(codiQrs)
+      .where(eq(codiQrs.chargeId, charge.id));
+    expect(qrs).toHaveLength(1);
+    expect(qrs[0].qrPayload).toBe(charge.qr?.payload);
+  });
+
+  it("repetir la petición de un cobro vencido no crea otro QR ni llama a Pey", async () => {
+    const merchant = await newMerchant();
+    const idempotencyKey = newKey();
+    const pey = createMockPeyAdapter({ now: () => T0 });
+    await createCharge({ db, pey, now: () => T0 }, merchant.id, {
+      amountCents: 15050,
+      idempotencyKey,
+    });
+
+    const again = await createCharge(
+      { db, pey, now: () => at(900) },
+      merchant.id,
+      {
+        amountCents: 15050,
+        idempotencyKey,
+      },
+    );
+
+    expect(again.ok && again.charge.status).toBe("expired");
+    expect(pey.calls).toHaveLength(1);
+  });
+
+  it("no toca cobros que ya están pagados, cerrados o inciertos", async () => {
+    const merchant = await newMerchant();
+
+    const paid = await waitingCharge(merchant.id);
+    const [qr] = await db
+      .select()
+      .from(codiQrs)
+      .where(eq(codiQrs.chargeId, paid.id));
+    const payment = await insertPayment(qr.id);
+    await db
+      .update(charges)
+      .set({ status: "paid", paidPaymentId: payment.id })
+      .where(eq(charges.id, paid.id));
+
+    const closed = await waitingCharge(merchant.id);
+    await closeCharge({ db, now: () => at(10) }, merchant.id, closed.id);
+
+    const [uncertain] = await db
+      .insert(charges)
+      .values({
+        merchantId: merchant.id,
+        amountCents: 1301,
+        idempotencyKey: newKey(),
+        status: "qr_uncertain",
+      })
+      .returning();
+
+    const later = { db, now: () => at(7200) };
+    expect((await getCharge(later, merchant.id, paid.id))?.status).toBe("paid");
+    expect((await getCharge(later, merchant.id, closed.id))?.status).toBe(
+      "locally_closed",
+    );
+    expect((await getCharge(later, merchant.id, uncertain.id))?.status).toBe(
+      "qr_uncertain",
+    );
+  });
+});
+
+describe("closeCharge — cierre LOCAL", () => {
+  it("cierra un cobro que espera pago: locally_closed con closedAt, sin borrar el QR", async () => {
+    const merchant = await newMerchant();
+    const charge = await waitingCharge(merchant.id);
+
+    const result = await closeCharge(
+      { db, now: () => at(30) },
+      merchant.id,
+      charge.id,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.alreadyClosed).toBe(false);
+    expect(result.charge.status).toBe("locally_closed");
+    expect(result.charge.closedAt).toBe(at(30).toISOString());
+    const qrs = await db
+      .select()
+      .from(codiQrs)
+      .where(eq(codiQrs.chargeId, charge.id));
+    expect(qrs).toHaveLength(1);
+    expect((await rowOf(charge.id)).closedAt).toEqual(at(30));
+  });
+
+  it("es idempotente: cerrar de nuevo no cambia closedAt", async () => {
+    const merchant = await newMerchant();
+    const charge = await waitingCharge(merchant.id);
+    await closeCharge({ db, now: () => at(30) }, merchant.id, charge.id);
+
+    const again = await closeCharge(
+      { db, now: () => at(90) },
+      merchant.id,
+      charge.id,
+    );
+
+    expect(again.ok && again.alreadyClosed).toBe(true);
+    expect(again.ok && again.charge.closedAt).toBe(at(30).toISOString());
+  });
+
+  it("cierres simultáneos: todos terminan cerrados y solo uno lo ejecuta", async () => {
+    const merchant = await newMerchant();
+    const charge = await waitingCharge(merchant.id);
+
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        closeCharge({ db, now: () => at(30) }, merchant.id, charge.id),
+      ),
+    );
+
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(results.filter((r) => r.ok && !r.alreadyClosed)).toHaveLength(1);
+  });
+
+  it("un cobro de OTRO comercio o inexistente es not_found y no se modifica", async () => {
+    const owner = await newMerchant();
+    const intruder = await newMerchant();
+    const charge = await waitingCharge(owner.id);
+
+    const foreign = await closeCharge({ db }, intruder.id, charge.id);
+    const missing = await closeCharge({ db }, owner.id, randomUUID());
+
+    expect(foreign).toEqual({ ok: false, error: "not_found" });
+    expect(missing).toEqual({ ok: false, error: "not_found" });
+    expect((await rowOf(charge.id)).status).toBe("waiting_payment");
+  });
+
+  it("un cobro ya vencido NO se cierra: devuelve su estado real (expired)", async () => {
+    const merchant = await newMerchant();
+    const charge = await waitingCharge(merchant.id);
+
+    const result = await closeCharge(
+      { db, now: () => at(601) },
+      merchant.id,
+      charge.id,
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok || result.error !== "not_closable")
+      throw new Error("esperado not_closable");
+    expect(result.charge.status).toBe("expired");
+    expect((await rowOf(charge.id)).closedAt).toBeNull();
+  });
+
+  it("un cobro pagado NO se puede cerrar: gana el pago", async () => {
+    const merchant = await newMerchant();
+    const charge = await waitingCharge(merchant.id);
+    const [qr] = await db
+      .select()
+      .from(codiQrs)
+      .where(eq(codiQrs.chargeId, charge.id));
+    const payment = await insertPayment(qr.id);
+    await db
+      .update(charges)
+      .set({ status: "paid", paidPaymentId: payment.id })
+      .where(eq(charges.id, charge.id));
+
+    const result = await closeCharge(
+      { db, now: () => at(30) },
+      merchant.id,
+      charge.id,
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok || result.error !== "not_closable")
+      throw new Error("esperado not_closable");
+    expect(result.charge.status).toBe("paid");
+    expect((await rowOf(charge.id)).status).toBe("paid");
+  });
+
+  it("un cobro con QR incierto o aún generándose no se cierra", async () => {
+    const merchant = await newMerchant();
+    const [creating] = await db
+      .insert(charges)
+      .values({
+        merchantId: merchant.id,
+        amountCents: 100,
+        idempotencyKey: newKey(),
+      })
+      .returning();
+    const [uncertain] = await db
+      .insert(charges)
+      .values({
+        merchantId: merchant.id,
+        amountCents: 1301,
+        idempotencyKey: newKey(),
+        status: "qr_uncertain",
+      })
+      .returning();
+
+    const a = await closeCharge({ db }, merchant.id, creating.id);
+    const b = await closeCharge({ db }, merchant.id, uncertain.id);
+
+    expect(a.ok).toBe(false);
+    expect(b.ok).toBe(false);
+    expect((await rowOf(creating.id)).status).toBe("created");
+    expect((await rowOf(uncertain.id)).status).toBe("qr_uncertain");
   });
 });

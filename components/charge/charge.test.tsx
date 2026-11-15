@@ -24,7 +24,7 @@ function setup(
 
 const confirmButton = () =>
   screen.getByRole("button", {
-    name: /confirm(ar importe|ando|ado)|importe confirmado/i,
+    name: /confirm(ar importe|ando|ado)|importe confirmado|generando código/i,
   });
 
 describe("AmountDisplay", () => {
@@ -242,7 +242,9 @@ describe("AmountConfirmation — protección contra duplicados", () => {
     await user.dblClick(button);
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Confirmando…" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Generando código…" }),
+    ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Corregir importe" }),
     ).toBeDisabled();

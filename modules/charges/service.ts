@@ -1,4 +1,4 @@
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, lte } from "drizzle-orm";
 import type { Database } from "@/adapters/db/create-db";
 import {
   charges,
@@ -101,25 +101,56 @@ async function markUncertain(db: Database, chargeId: string, reason: string) {
   );
 }
 
-async function settleStaleCreated(
+/**
+ * Pone al día las transiciones que dependen solo del tiempo, SIEMPRE en el
+ * servidor y al leer el cobro (el reloj del cliente nunca decide):
+ *  - `created` sin resolver tras `STALE_CREATED_MS` → `qr_uncertain`.
+ *  - `waiting_payment` con `expires_at` vencido → `expired`.
+ *
+ * `expired` NO es «pago rechazado» ni impide registrar un pago tardío (RN, UX
+ * §6): solo describe que el QR dejó de estar vigente. Los UPDATE son
+ * condicionales al estado actual, así nunca pisan un estado posterior (p. ej.
+ * un `paid` que llegue en paralelo).
+ */
+async function settleCharge(
   deps: Pick<ChargesDeps, "db" | "now">,
   merchantId: string,
   found: NonNullable<Awaited<ReturnType<typeof loadCharge>>>,
 ) {
   const now = (deps.now ?? (() => new Date()))();
-  const isStale =
-    found.charge.status === "created" &&
-    now.getTime() - found.charge.createdAt.getTime() > STALE_CREATED_MS;
-  if (!isStale) return found;
+  const { charge } = found;
 
-  await markUncertain(
-    deps.db,
-    found.charge.id,
-    "La solicitud de QR quedó sin resolver; no se sabe si Pey la creó.",
-  );
+  const isStaleCreated =
+    charge.status === "created" &&
+    now.getTime() - charge.createdAt.getTime() > STALE_CREATED_MS;
+  const isExpired =
+    charge.status === "waiting_payment" &&
+    charge.expiresAt !== null &&
+    charge.expiresAt.getTime() <= now.getTime();
+
+  if (!isStaleCreated && !isExpired) return found;
+
+  if (isStaleCreated) {
+    await markUncertain(
+      deps.db,
+      charge.id,
+      "La solicitud de QR quedó sin resolver; no se sabe si Pey la creó.",
+    );
+  } else {
+    await deps.db
+      .update(charges)
+      .set({ status: "expired", updatedAt: now })
+      .where(
+        and(
+          eq(charges.id, charge.id),
+          eq(charges.status, "waiting_payment"),
+          lte(charges.expiresAt, now),
+        ),
+      );
+  }
+
   return (
-    (await loadCharge(deps.db, merchantId, eq(charges.id, found.charge.id))) ??
-    found
+    (await loadCharge(deps.db, merchantId, eq(charges.id, charge.id))) ?? found
   );
 }
 
@@ -211,7 +242,7 @@ export async function createCharge(
     if (existing.charge.amountCents !== input.amountCents) {
       return { ok: false, error: "idempotency_conflict" };
     }
-    const settled = await settleStaleCreated(deps, merchantId, existing);
+    const settled = await settleCharge(deps, merchantId, existing);
     return {
       ok: true,
       charge: toDto(settled.charge, settled.qr),
@@ -306,6 +337,77 @@ export async function getCharge(
 ): Promise<ChargeDto | null> {
   const found = await loadCharge(deps.db, merchantId, eq(charges.id, chargeId));
   if (!found) return null;
-  const settled = await settleStaleCreated(deps, merchantId, found);
+  const settled = await settleCharge(deps, merchantId, found);
   return toDto(settled.charge, settled.qr);
+}
+
+export type CloseChargeResult =
+  | { ok: true; charge: ChargeDto; alreadyClosed: boolean }
+  /** El cobro no existe o es de otro comercio (indistinguibles). */
+  | { ok: false; error: "not_found" }
+  /** Solo se puede cerrar un cobro que espera pago; se devuelve el estado real. */
+  | { ok: false; error: "not_closable"; charge: ChargeDto };
+
+/**
+ * «Cerrar cobro» (UF-04): cierre LOCAL de un cobro que espera pago.
+ *
+ * Solo cambia el estado en CobraVoz: no cancela nada en el banco ni borra el
+ * QR ni impide conciliar un pago tardío (RN, Architecture §7). Por eso:
+ *  - Solo se cierra desde `waiting_payment`; un cobro `paid`, `expired`,
+ *    incierto o en incidencia no se toca.
+ *  - El UPDATE es condicional al estado: si en paralelo llegó un pago, gana el
+ *    pago y la respuesta es `not_closable` con el estado real.
+ *  - Repetir el cierre es idempotente (`alreadyClosed`).
+ */
+export async function closeCharge(
+  deps: Pick<ChargesDeps, "db" | "now">,
+  merchantId: string,
+  chargeId: string,
+): Promise<CloseChargeResult> {
+  const now = (deps.now ?? (() => new Date()))();
+  const where = eq(charges.id, chargeId);
+
+  const found = await loadCharge(deps.db, merchantId, where);
+  if (!found) return { ok: false, error: "not_found" };
+  const settled = await settleCharge(deps, merchantId, found);
+
+  if (settled.charge.status === "locally_closed") {
+    return {
+      ok: true,
+      charge: toDto(settled.charge, settled.qr),
+      alreadyClosed: true,
+    };
+  }
+
+  if (settled.charge.status === "waiting_payment") {
+    const updated = await deps.db
+      .update(charges)
+      .set({ status: "locally_closed", closedAt: now, updatedAt: now })
+      .where(and(where, eq(charges.status, "waiting_payment")))
+      .returning({ id: charges.id });
+
+    if (updated.length > 0) {
+      const closed = await loadCharge(deps.db, merchantId, where);
+      return {
+        ok: true,
+        charge: toDto(closed!.charge, closed!.qr),
+        alreadyClosed: false,
+      };
+    }
+  }
+
+  // Cambió en paralelo (pago, cierre simultáneo...) o nunca fue cerrable.
+  const current = (await loadCharge(deps.db, merchantId, where)) ?? settled;
+  if (current.charge.status === "locally_closed") {
+    return {
+      ok: true,
+      charge: toDto(current.charge, current.qr),
+      alreadyClosed: true,
+    };
+  }
+  return {
+    ok: false,
+    error: "not_closable",
+    charge: toDto(current.charge, current.qr),
+  };
 }
