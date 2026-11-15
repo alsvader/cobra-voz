@@ -11,7 +11,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.test.{ts,tsx}"],
-    exclude: ["node_modules/**", ".next/**", "e2e/**"],
+    // `*.db.test.ts` necesita Postgres local: ver `npm run test:db`.
+    exclude: ["node_modules/**", ".next/**", "e2e/**", "**/*.db.test.ts"],
     restoreMocks: true,
   },
 });

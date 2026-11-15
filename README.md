@@ -12,11 +12,18 @@ e `IMPLEMENTATION_PLAN.md` (orden de trabajo por hitos y PR).
 
 ## Empezar
 
+Requiere Docker en marcha (Supabase local).
+
 ```bash
 npm install
-cp .env.example .env.local   # sin secretos en el repo
+npm run db:start             # Supabase local (Postgres + Auth); la 1.ª vez descarga imágenes
+npm run db:env               # genera .env.local con las URLs/claves locales (no se commitea)
+npm run db:migrate           # aplica las migraciones de Drizzle
+npm run db:seed              # comercio demo + usuario demo@cobravoz.local
 npm run dev                  # http://localhost:3000
 ```
+
+Detalles del modelo de datos, estados y seguridad: [`adapters/db/README.md`](adapters/db/README.md).
 
 ## Scripts
 
@@ -28,6 +35,8 @@ npm run dev                  # http://localhost:3000
 | `npm run test`                    | Pruebas unitarias y de componentes (Vitest)                |
 | `npm run e2e`                     | E2E con Playwright contra el build (`npm run build` antes) |
 | `npm run format` / `format:check` | Prettier                                                   |
+| `npm run db:*`                    | Supabase local, migraciones y seed (ver `adapters/db`)     |
+| `npm run test:db`                 | Pruebas de integración contra Postgres local               |
 | `npm run icons`                   | Regenera los iconos temporales de la PWA                   |
 | `npm run check`                   | `lint` + `typecheck` + `test`                              |
 
