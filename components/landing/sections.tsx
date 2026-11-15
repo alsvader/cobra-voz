@@ -18,6 +18,8 @@ import {
   useCases,
 } from "@/components/landing/content";
 import { MarketingCTA } from "@/components/landing/marketing-cta";
+import { revealDelay, staggerDelay } from "@/components/landing/motion";
+import { RevealGroup } from "@/components/landing/reveal";
 import {
   BenefitVoicePreview,
   ConfirmAmountPreview,
@@ -54,14 +56,17 @@ export function HeroSection() {
       className="overflow-hidden pt-10 pb-16 lg:py-20"
       decor={
         <>
-          <OrganicBlob className="top-24 -right-16 h-72 w-72 lg:top-16 lg:right-[6%] lg:h-[420px] lg:w-[420px]" />
-          <OrganicBlob className="bottom-0 -left-24 h-48 w-48 lg:bottom-8 lg:left-auto lg:right-[18%] lg:h-56 lg:w-56" />
+          <OrganicBlob className="landing-fade top-24 -right-16 h-72 w-72 lg:top-16 lg:right-[6%] lg:h-[420px] lg:w-[420px]" />
+          <OrganicBlob className="landing-fade bottom-0 -left-24 h-48 w-48 lg:bottom-8 lg:left-auto lg:right-[18%] lg:h-56 lg:w-56" />
         </>
       }
     >
       <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,54fr)_minmax(0,46fr)] lg:gap-10">
         <div className="flex max-w-[540px] flex-col gap-6">
-          <p className="flex items-center gap-2 text-sm font-semibold text-teal-700">
+          <p
+            className="landing-rise flex items-center gap-2 text-sm font-semibold text-teal-700"
+            style={revealDelay(0)}
+          >
             <span
               aria-hidden="true"
               className="size-2.5 rounded-full bg-teal-600"
@@ -70,14 +75,21 @@ export function HeroSection() {
           </p>
           <h1
             id="inicio-titulo"
-            className="text-balance text-[2rem] leading-[1.1] font-bold text-foreground min-[375px]:text-[2.25rem] min-[430px]:text-[2.5rem] lg:text-[3.5rem]"
+            className="landing-rise text-balance text-[2rem] leading-[1.1] font-bold text-foreground min-[375px]:text-[2.25rem] min-[430px]:text-[2.5rem] lg:text-[3.5rem]"
+            style={revealDelay(100)}
           >
             {hero.title}
           </h1>
-          <p className="text-base text-ink-600 lg:text-lg">
+          <p
+            className="landing-rise text-base text-ink-600 lg:text-lg"
+            style={revealDelay(210)}
+          >
             {hero.description}
           </p>
-          <div className="flex flex-col gap-3 lg:flex-row">
+          <div
+            className="landing-rise flex flex-col gap-3 lg:flex-row"
+            style={revealDelay(330)}
+          >
             <MarketingCTA href="#contacto" variant="primary">
               {hero.primaryCta}
             </MarketingCTA>
@@ -86,7 +98,7 @@ export function HeroSection() {
             </MarketingCTA>
           </div>
         </div>
-        <div className="relative">
+        <div className="landing-object-rise relative" style={revealDelay(460)}>
           <div
             aria-hidden="true"
             className="absolute top-10 -right-6 -bottom-4 -left-8 -z-10 rounded-[48%_52%_46%_54%] bg-teal-100"
@@ -111,38 +123,47 @@ export function HowItWorksSection() {
       labelledBy="como-funciona-titulo"
       className="py-20 lg:py-28"
     >
-      <SectionHeading
-        id="como-funciona-titulo"
-        eyebrow={howItWorks.eyebrow}
-        title={howItWorks.title}
-        description={howItWorks.description}
-        align="center"
-      />
-      <ol className="mt-10 grid gap-5 lg:mt-14 lg:grid-cols-3 lg:gap-6">
-        {howItWorks.steps.map((step, index) => {
-          const Preview = stepPreviews[index];
-          if (!Preview) return null;
-          return (
-            <li
-              key={step.number}
-              className="flex flex-col gap-5 rounded-[20px] border border-border bg-surface p-5 shadow-card lg:p-7"
-            >
-              <div className="flex flex-col gap-3">
-                <p className="text-sm font-bold text-teal-700">{step.number}</p>
-                <h3 className="text-[1.375rem] leading-7 font-bold text-foreground">
-                  {step.title}
-                </h3>
-                <p className="text-[15px] text-ink-600 lg:text-base">
-                  {step.description}
-                </p>
-              </div>
-              <div className="mt-auto">
-                <Preview />
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+      <RevealGroup>
+        <div className="landing-child">
+          <SectionHeading
+            id="como-funciona-titulo"
+            eyebrow={howItWorks.eyebrow}
+            title={howItWorks.title}
+            description={howItWorks.description}
+            align="center"
+          />
+        </div>
+      </RevealGroup>
+      <RevealGroup>
+        <ol className="mt-10 grid gap-5 lg:mt-14 lg:grid-cols-3 lg:gap-6">
+          {howItWorks.steps.map((step, index) => {
+            const Preview = stepPreviews[index];
+            if (!Preview) return null;
+            return (
+              <li
+                key={step.number}
+                className="landing-object flex flex-col gap-5 rounded-[20px] border border-border bg-surface p-5 shadow-card lg:p-7"
+                style={staggerDelay(index)}
+              >
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm font-bold text-teal-700">
+                    {step.number}
+                  </p>
+                  <h3 className="text-[1.375rem] leading-7 font-bold text-foreground">
+                    {step.title}
+                  </h3>
+                  <p className="text-[15px] text-ink-600 lg:text-base">
+                    {step.description}
+                  </p>
+                </div>
+                <div className="mt-auto">
+                  <Preview />
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </RevealGroup>
     </SectionContainer>
   );
 }
@@ -157,15 +178,22 @@ export function BenefitsSection() {
         <OrganicBlob className="-top-10 -left-20 h-48 w-48 lg:h-64 lg:w-64" />
       }
     >
-      <SectionHeading
-        id="beneficios-titulo"
-        eyebrow={benefits.eyebrow}
-        title={benefits.title}
-        description={benefits.description}
-        align="center"
-      />
-      <div className="mt-10 grid gap-5 lg:mt-14 lg:grid-cols-2 lg:gap-6">
-        <article className="flex flex-col overflow-hidden rounded-[20px] border border-border bg-surface shadow-card lg:row-span-2">
+      <RevealGroup>
+        <div className="landing-child">
+          <SectionHeading
+            id="beneficios-titulo"
+            eyebrow={benefits.eyebrow}
+            title={benefits.title}
+            description={benefits.description}
+            align="center"
+          />
+        </div>
+      </RevealGroup>
+      <RevealGroup className="mt-10 grid gap-5 lg:mt-14 lg:grid-cols-2 lg:gap-6">
+        <article
+          className="landing-object flex flex-col overflow-hidden rounded-[20px] border border-border bg-surface shadow-card lg:row-span-2"
+          style={staggerDelay(0)}
+        >
           <div className="flex gap-4 p-5 lg:p-7">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
               <Mic aria-hidden="true" className="size-5" />
@@ -183,7 +211,10 @@ export function BenefitsSection() {
             <BenefitVoicePreview />
           </div>
         </article>
-        <article className="rounded-[20px] border border-border bg-surface p-5 shadow-card lg:p-7">
+        <article
+          className="landing-object rounded-[20px] border border-border bg-surface p-5 shadow-card lg:p-7"
+          style={staggerDelay(1)}
+        >
           <div className="flex gap-4">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
               <ShieldCheck aria-hidden="true" className="size-5" />
@@ -202,7 +233,10 @@ export function BenefitsSection() {
             <StatusBadge tone="success" label="Pago recibido" />
           </div>
         </article>
-        <article className="rounded-[20px] border border-border bg-surface p-5 shadow-card lg:p-7">
+        <article
+          className="landing-object rounded-[20px] border border-border bg-surface p-5 shadow-card lg:p-7"
+          style={staggerDelay(2)}
+        >
           <div className="flex gap-4">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
               <ReceiptText aria-hidden="true" className="size-5" />
@@ -223,7 +257,7 @@ export function BenefitsSection() {
             sample={benefits.sales.sample}
           />
         </article>
-      </div>
+      </RevealGroup>
     </SectionContainer>
   );
 }
@@ -235,42 +269,48 @@ export function TrustSection() {
       labelledBy="confianza-titulo"
       className="py-20 lg:py-28"
     >
-      <div className="rounded-[28px] bg-teal-100 px-5 py-8 lg:grid lg:grid-cols-[minmax(0,42fr)_minmax(0,58fr)] lg:items-center lg:gap-16 lg:p-16">
-        <div className="flex flex-col gap-6">
-          <SectionHeading
-            id="confianza-titulo"
-            eyebrow={trust.eyebrow}
-            title={trust.title}
-            description={trust.description}
-          />
-          <div className="flex gap-3 rounded-[20px] bg-surface p-4">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
-              <ShieldCheck aria-hidden="true" className="size-5" />
-            </span>
-            <div>
-              <h3 className="font-semibold text-teal-700">
-                {trust.noticeTitle}
-              </h3>
-              <p className="mt-1 text-sm text-ink-600">{trust.notice}</p>
+      <RevealGroup>
+        <div className="rounded-[28px] bg-teal-100 px-5 py-8 lg:grid lg:grid-cols-[minmax(0,42fr)_minmax(0,58fr)] lg:items-center lg:gap-16 lg:p-16">
+          <div className="landing-child flex flex-col gap-6">
+            <SectionHeading
+              id="confianza-titulo"
+              eyebrow={trust.eyebrow}
+              title={trust.title}
+              description={trust.description}
+            />
+            <div className="flex gap-3 rounded-[20px] bg-surface p-4">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700">
+                <ShieldCheck aria-hidden="true" className="size-5" />
+              </span>
+              <div>
+                <h3 className="font-semibold text-teal-700">
+                  {trust.noticeTitle}
+                </h3>
+                <p className="mt-1 text-sm text-ink-600">{trust.notice}</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-8 flex flex-col gap-6 lg:mt-0">
+            <div className="landing-object" style={revealDelay(140)}>
+              <PaymentStatePreview
+                tone="warning"
+                label={trust.pending.label}
+                amount={trust.pending.amount}
+                detail={trust.pending.detail}
+              />
+            </div>
+            <div className="landing-object" style={revealDelay(280)}>
+              <PaymentStatePreview
+                tone="success"
+                label={trust.received.label}
+                amount={trust.received.amount}
+                detail={trust.received.detail}
+                reference={trust.received.reference}
+              />
             </div>
           </div>
         </div>
-        <div className="mt-8 flex flex-col gap-6 lg:mt-0">
-          <PaymentStatePreview
-            tone="warning"
-            label={trust.pending.label}
-            amount={trust.pending.amount}
-            detail={trust.pending.detail}
-          />
-          <PaymentStatePreview
-            tone="success"
-            label={trust.received.label}
-            amount={trust.received.amount}
-            detail={trust.received.detail}
-            reference={trust.received.reference}
-          />
-        </div>
-      </div>
+      </RevealGroup>
     </SectionContainer>
   );
 }
@@ -282,8 +322,8 @@ export function UseCasesSection() {
       labelledBy="para-quien-es-titulo"
       className="py-20 lg:py-24"
     >
-      <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,44fr)_minmax(0,56fr)] lg:gap-20">
-        <div className="flex flex-col gap-6">
+      <RevealGroup className="grid items-center gap-10 lg:grid-cols-[minmax(0,44fr)_minmax(0,56fr)] lg:gap-20">
+        <div className="landing-child flex flex-col gap-6">
           <SectionHeading
             id="para-quien-es-titulo"
             eyebrow={useCases.eyebrow}
@@ -296,12 +336,13 @@ export function UseCasesSection() {
           </p>
         </div>
         <ul className="flex flex-col gap-4 lg:gap-5">
-          {useCases.cases.map((item) => {
+          {useCases.cases.map((item, index) => {
             const Icon = useCaseIcons[item.icon];
             return (
               <li
                 key={item.title}
-                className="grid grid-cols-[3rem_1fr] items-center gap-x-4 gap-y-3 rounded-[20px] border border-border bg-surface p-5 shadow-card lg:items-start lg:p-6"
+                className="landing-object grid grid-cols-[3rem_1fr] items-center gap-x-4 gap-y-3 rounded-[20px] border border-border bg-surface p-5 shadow-card lg:items-start lg:p-6"
+                style={staggerDelay(index)}
               >
                 <span className="flex size-12 items-center justify-center rounded-xl bg-teal-100 text-teal-700 lg:row-span-2">
                   <Icon aria-hidden="true" className="size-5" />
@@ -316,7 +357,7 @@ export function UseCasesSection() {
             );
           })}
         </ul>
-      </div>
+      </RevealGroup>
     </SectionContainer>
   );
 }
@@ -328,36 +369,38 @@ export function FinalCTASection() {
       labelledBy="contacto-titulo"
       className="py-16"
     >
-      <div className="relative overflow-hidden rounded-[28px] bg-primary px-6 py-14 text-center lg:rounded-[32px] lg:px-20 lg:py-20">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-24 -left-16 h-56 w-72 rounded-full bg-teal-700/45"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-10 -bottom-24 h-56 w-80 rounded-full bg-teal-700/35"
-        />
-        <div className="relative">
-          <SectionHeading
-            id="contacto-titulo"
-            eyebrow={finalCta.eyebrow}
-            title={finalCta.title}
-            description={finalCta.description}
-            align="center"
-            tone="inverse"
+      <RevealGroup>
+        <div className="landing-object relative overflow-hidden rounded-[28px] bg-primary px-6 py-14 text-center lg:rounded-[32px] lg:px-20 lg:py-20">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-24 -left-16 h-56 w-72 rounded-full bg-teal-700/45"
           />
-          <div className="mt-8">
-            <MarketingCTA
-              href={contactHref}
-              variant="inverse"
-              pendingNote={contactPendingNote}
-              className="px-8"
-            >
-              {finalCta.cta}
-            </MarketingCTA>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-10 -bottom-24 h-56 w-80 rounded-full bg-teal-700/35"
+          />
+          <div className="relative">
+            <SectionHeading
+              id="contacto-titulo"
+              eyebrow={finalCta.eyebrow}
+              title={finalCta.title}
+              description={finalCta.description}
+              align="center"
+              tone="inverse"
+            />
+            <div className="mt-8">
+              <MarketingCTA
+                href={contactHref}
+                variant="inverse"
+                pendingNote={contactPendingNote}
+                className="px-8"
+              >
+                {finalCta.cta}
+              </MarketingCTA>
+            </div>
           </div>
         </div>
-      </div>
+      </RevealGroup>
     </SectionContainer>
   );
 }

@@ -86,6 +86,9 @@
   --text-amount-sm: 32px;
   --text-amount-sm--line-height: 40px;
 
+  /* Curva de salida con más intención que el ease-out nativo. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+
   /* 4. Radios y sombras */
   --radius-sm: 8px;
   --radius-md: 12px;

@@ -1,3 +1,5 @@
+import "./motion.css";
+
 export default function LandingLayout({
   children,
 }: {

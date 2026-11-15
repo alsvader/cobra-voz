@@ -1,0 +1,150 @@
+:root {
+  --landing-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --landing-enter-duration: 780ms;
+  --landing-object-duration: 880ms;
+}
+
+@keyframes landing-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes landing-enter-object {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes landing-header {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.landing-faq-panel {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.landing-faq-panel[data-open="false"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.landing-faq-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.landing-faq-icon {
+  transition: opacity 280ms var(--landing-ease);
+}
+
+.landing-menu[data-open="false"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.landing-press {
+  transition-property: color, background-color, border-color, transform;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out-strong);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-header {
+    animation: landing-header 640ms var(--landing-ease) both;
+  }
+
+  .landing-rise {
+    animation: landing-enter var(--landing-enter-duration) var(--landing-ease) both;
+    animation-delay: var(--reveal-delay, 0ms);
+  }
+
+  .landing-object-rise {
+    animation: landing-enter-object var(--landing-object-duration) var(--landing-ease)
+      both;
+    animation-delay: var(--reveal-delay, 0ms);
+  }
+
+  .landing-fade {
+    animation: landing-header 1100ms var(--landing-ease) both;
+    animation-delay: var(--reveal-delay, 0ms);
+  }
+
+  .landing-reveal[data-reveal="wait"] .landing-child {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  .landing-reveal[data-reveal="wait"] .landing-object {
+    opacity: 0;
+    transform: translateY(28px) scale(0.97);
+  }
+
+  .landing-reveal[data-reveal="in"] .landing-child {
+    animation: landing-enter var(--landing-enter-duration) var(--landing-ease) both;
+    animation-delay: var(--reveal-delay, 0ms);
+  }
+
+  .landing-reveal[data-reveal="in"] .landing-object {
+    animation: landing-enter-object var(--landing-object-duration) var(--landing-ease)
+      both;
+    animation-delay: var(--reveal-delay, 0ms);
+  }
+
+  .landing-press:active:not([aria-disabled="true"]) {
+    transform: scale(0.97);
+  }
+
+  .landing-faq-panel {
+    transition:
+      grid-template-rows 420ms var(--landing-ease),
+      opacity 420ms var(--landing-ease);
+  }
+
+  .landing-faq-panel[data-open="false"] {
+    transition-duration: 280ms;
+  }
+
+  .landing-menu {
+    transform-origin: top center;
+    transition:
+      opacity 360ms var(--landing-ease),
+      transform 360ms var(--landing-ease),
+      visibility 0s linear;
+  }
+
+  .landing-menu[data-open="false"] {
+    opacity: 0;
+    transform: translateY(-8px);
+    transition:
+      opacity 240ms var(--landing-ease),
+      transform 240ms var(--landing-ease),
+      visibility 0s linear 240ms;
+  }
+
+  .landing-menu[data-open="true"] {
+    opacity: 1;
+    transform: none;
+  }
+
+}

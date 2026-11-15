@@ -30,7 +30,7 @@ export function MarketingCTA({
   pendingNoteId = "contacto-pendiente",
 }: MarketingCTAProps) {
   const classes = cn(
-    "inline-flex h-14 cursor-pointer items-center justify-center rounded-button px-6 text-base font-semibold transition-colors duration-150 ease-out",
+    "landing-press inline-flex h-14 cursor-pointer items-center justify-center rounded-button px-6 text-base font-semibold",
     variantClass[variant],
     className,
   );

@@ -38,39 +38,43 @@ export function MobileNavigation() {
       <button
         ref={buttonRef}
         type="button"
-        className="inline-flex size-11 cursor-pointer items-center justify-center rounded-md border border-border bg-surface text-foreground transition-colors duration-150 ease-out hover:border-teal-600 hover:bg-teal-100"
+        className="landing-press relative inline-flex size-11 cursor-pointer items-center justify-center rounded-md border border-border bg-surface text-foreground hover:border-teal-600 hover:bg-teal-100"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((current) => !current)}
       >
-        {open ? (
-          <X aria-hidden="true" className="size-5" />
-        ) : (
-          <Menu aria-hidden="true" className="size-5" />
-        )}
+        <Menu
+          aria-hidden="true"
+          className={`absolute size-5 transition-opacity duration-150 ease-out-strong ${open ? "opacity-0" : "opacity-100"}`}
+        />
+        <X
+          aria-hidden="true"
+          className={`absolute size-5 transition-opacity duration-150 ease-out-strong ${open ? "opacity-100" : "opacity-0"}`}
+        />
         <span className="sr-only">{open ? "Cerrar menú" : "Abrir menú"}</span>
       </button>
-      {open ? (
-        <nav
-          id={panelId}
-          aria-label="Secciones"
-          className="fixed inset-x-0 top-16 z-40 border-b border-border bg-canvas px-4 py-2 min-[360px]:px-5"
-        >
-          <ul>
-            {headerLinks.map((link) => (
-              <li key={link.href}>
-                <LandingAnchor
-                  href={link.href}
-                  className="flex min-h-11 cursor-pointer items-center text-base font-medium text-foreground transition-colors duration-150 ease-out hover:text-teal-700"
-                  onNavigate={() => setOpen(false)}
-                >
-                  {link.label}
-                </LandingAnchor>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      ) : null}
+      <nav
+        id={panelId}
+        aria-label="Secciones"
+        data-open={open}
+        inert={!open}
+        aria-hidden={!open}
+        className="landing-menu fixed inset-x-0 top-16 z-40 border-b border-border bg-canvas px-4 py-2 min-[360px]:px-5"
+      >
+        <ul>
+          {headerLinks.map((link) => (
+            <li key={link.href}>
+              <LandingAnchor
+                href={link.href}
+                className="flex min-h-11 cursor-pointer items-center text-base font-medium text-foreground transition-colors duration-150 ease-out-strong hover:text-teal-700"
+                onNavigate={() => setOpen(false)}
+              >
+                {link.label}
+              </LandingAnchor>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </div>
   );
 }

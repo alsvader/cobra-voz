@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { faq } from "@/components/landing/content";
+import { staggerDelay } from "@/components/landing/motion";
+import { RevealGroup } from "@/components/landing/reveal";
 import { SectionContainer } from "@/components/landing/section-container";
 import { SectionHeading } from "@/components/landing/section-heading";
 
@@ -15,15 +17,19 @@ export function FAQSection() {
       labelledBy="preguntas-frecuentes-titulo"
       className="py-20 lg:py-28"
     >
-      <SectionHeading
-        id="preguntas-frecuentes-titulo"
-        eyebrow={faq.eyebrow}
-        title={faq.title}
-        description={faq.description}
-        align="center"
-      />
-      <div className="mx-auto mt-10 flex max-w-[860px] flex-col gap-3">
-        {faq.items.map((item) => {
+      <RevealGroup>
+        <div className="landing-child">
+          <SectionHeading
+            id="preguntas-frecuentes-titulo"
+            eyebrow={faq.eyebrow}
+            title={faq.title}
+            description={faq.description}
+            align="center"
+          />
+        </div>
+      </RevealGroup>
+      <RevealGroup className="mx-auto mt-10 flex max-w-[860px] flex-col gap-3">
+        {faq.items.map((item, index) => {
           const open = openId === item.id;
           const panelId = `${item.id}-panel`;
           const buttonId = `${item.id}-button`;
@@ -31,24 +37,28 @@ export function FAQSection() {
           return (
             <div
               key={item.id}
-              className="rounded-[16px] border border-border bg-surface px-5 py-2 shadow-card"
+              className="landing-object rounded-[16px] border border-border bg-surface px-5 py-2 shadow-card"
+              style={staggerDelay(index)}
             >
               <h3>
                 <button
                   id={buttonId}
                   type="button"
-                  className="group flex min-h-11 w-full cursor-pointer items-center justify-between gap-4 py-3 text-left text-base font-semibold text-foreground transition-colors duration-150 ease-out hover:text-teal-700 lg:text-lg"
+                  className="landing-press group flex min-h-11 w-full cursor-pointer items-center justify-between gap-4 py-3 text-left text-base font-semibold text-foreground hover:text-teal-700 lg:text-lg"
                   aria-expanded={open}
                   aria-controls={panelId}
                   onClick={() => setOpenId(open ? null : item.id)}
                 >
                   <span>{item.question}</span>
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700 transition-colors duration-150 ease-out group-hover:bg-primary group-hover:text-white">
-                    {open ? (
-                      <Minus aria-hidden="true" className="size-4" />
-                    ) : (
-                      <Plus aria-hidden="true" className="size-4" />
-                    )}
+                  <span className="relative flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700 transition-colors duration-150 ease-out-strong group-hover:bg-primary group-hover:text-white">
+                    <Plus
+                      aria-hidden="true"
+                      className={`landing-faq-icon absolute size-4 ${open ? "opacity-0" : "opacity-100"}`}
+                    />
+                    <Minus
+                      aria-hidden="true"
+                      className={`landing-faq-icon absolute size-4 ${open ? "opacity-100" : "opacity-0"}`}
+                    />
                   </span>
                 </button>
               </h3>
@@ -56,15 +66,21 @@ export function FAQSection() {
                 id={panelId}
                 role="region"
                 aria-labelledby={buttonId}
-                hidden={!open}
-                className="border-t border-border pt-3 pb-4 text-[15px] text-ink-600 lg:text-base"
+                data-open={open}
+                aria-hidden={!open}
+                inert={!open}
+                className="landing-faq-panel"
               >
-                {item.answer}
+                <div className="landing-faq-clip">
+                  <div className="border-t border-border pt-3 pb-4 text-[15px] text-ink-600 lg:text-base">
+                    {item.answer}
+                  </div>
+                </div>
               </div>
             </div>
           );
         })}
-      </div>
+      </RevealGroup>
     </SectionContainer>
   );
 }
