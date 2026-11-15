@@ -20,7 +20,7 @@ export function SiteHeader() {
             <LandingAnchor
               key={link.href}
               href={link.href}
-              className="cursor-pointer text-[15px] font-medium text-ink-600 transition-colors duration-150 ease-out-strong hover:text-teal-700"
+              className="landing-nav-link cursor-pointer text-[15px] font-medium text-ink-600 transition-colors duration-150 ease-out-strong hover:text-teal-700"
             >
               {link.label}
             </LandingAnchor>

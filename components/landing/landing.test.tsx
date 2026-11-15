@@ -59,6 +59,24 @@ describe("Landing del MVP", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("reserva la barra de hover a los enlaces de texto del menú de escritorio", () => {
+    render(<LandingPage />);
+
+    const nav = document.querySelector("header nav");
+    const links = [...(nav?.querySelectorAll(".landing-nav-link") ?? [])];
+
+    expect(links.map((link) => link.textContent)).toEqual([
+      "Cómo funciona",
+      "Beneficios",
+      "Contacto",
+    ]);
+    expect(
+      nav
+        ?.querySelector('[href="/acceso"]')
+        ?.classList.contains("landing-nav-link"),
+    ).toBe(false);
+  });
+
   it("lleva a la aplicación desde el hero, el menú y el pie", async () => {
     const user = userEvent.setup();
     render(<LandingPage />);
