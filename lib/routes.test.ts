@@ -8,6 +8,12 @@ describe("isPrivatePath", () => {
     expect(isPrivatePath("/inicio/algo")).toBe(true);
   });
 
+  it("protege el recorrido de cobro (P02/P03)", () => {
+    expect(isPrivatePath("/cobro")).toBe(true);
+    expect(isPrivatePath("/cobro/confirmar")).toBe(true);
+    expect(isPrivatePath("/cobros-falsos")).toBe(false);
+  });
+
   it("deja públicas la landing y el acceso", () => {
     expect(isPrivatePath("/")).toBe(false);
     expect(isPrivatePath("/acceso")).toBe(false);

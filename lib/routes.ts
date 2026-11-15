@@ -3,12 +3,16 @@ export const ROUTES = {
   login: "/acceso",
   app: "/inicio",
   settings: "/configuracion",
+  /** Recorrido de cobro: P02 hoy; P03 (`/cobro/[id]`) se añadirá después. */
+  charge: "/cobro",
+  confirmAmount: "/cobro/confirmar",
 } as const;
 
 /** Rutas privadas (requieren sesión). P04/P02/P03/A03 se añadirán en sus PR. */
 export const PRIVATE_PATH_PREFIXES: readonly string[] = [
   ROUTES.app,
   ROUTES.settings,
+  ROUTES.charge,
 ];
 
 export function isPrivatePath(pathname: string): boolean {

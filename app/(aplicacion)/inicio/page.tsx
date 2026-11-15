@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { Keyboard, Settings } from "lucide-react";
 import { getDb } from "@/adapters/db/client";
 import { AppShell } from "@/components/ui/app-shell";
+import { buttonVariants } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
+import { VoiceCaptureButton } from "@/components/charge/voice-capture-button";
 import { requireMerchantContext } from "@/modules/identity/guards";
 import { getMerchantProfile } from "@/modules/merchant/service";
 import { ROUTES } from "@/lib/routes";
@@ -44,13 +47,27 @@ async function HomeContent() {
         </Link>
       </header>
 
-      <div className="flex flex-col gap-2 py-6">
-        <h1 className="text-2xl font-bold text-foreground">Inicio</h1>
-        <p className="text-base text-muted-foreground">
-          Aquí aparecerán el cobro por voz, el resumen del día y tus
-          movimientos.
-        </p>
-      </div>
+      {/* P01: la voz es la acción dominante; la captura manual siempre está a mano. */}
+      <h1 className="sr-only">Inicio</h1>
+      <section
+        aria-label="Cobrar"
+        className="flex flex-col items-center gap-6 py-8"
+      >
+        <VoiceCaptureButton state="unavailable" />
+
+        <Notice tone="info" label="Voz no disponible" className="w-full">
+          Por ahora la captura por voz no está disponible. Puedes cobrar
+          ingresando el importe manualmente.
+        </Notice>
+
+        <Link
+          href={ROUTES.confirmAmount}
+          className={buttonVariants({ variant: "outline", size: "md" })}
+        >
+          <Keyboard aria-hidden="true" />
+          Ingresar importe manualmente
+        </Link>
+      </section>
     </>
   );
 }
@@ -59,7 +76,8 @@ function HomeSkeleton() {
   return (
     <div className="flex flex-col gap-6 py-4" aria-hidden="true">
       <Skeleton className="h-10 w-2/3" />
-      <Skeleton className="h-24 rounded-lg" />
+      <Skeleton className="mx-auto size-28 rounded-full" />
+      <Skeleton className="h-14 rounded-button" />
     </div>
   );
 }

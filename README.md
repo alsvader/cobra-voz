@@ -26,13 +26,19 @@ npm run dev                  # http://localhost:3000
 Acceso local: `demo@cobravoz.local` / `cobravoz-local-dev` (solo desarrollo; no hay
 registro público, las cuentas se preconfiguran y se vinculan a un comercio).
 
+### Importes
+
+`modules/charges/amount.ts` es la única vía de texto → centavos (enteros, sin `float`;
+máx. 2 decimales, > 0). P02 (`/cobro/confirmar`) exige la acción explícita
+«Confirmar importe»; `?centavos=` se revalida siempre en el servidor.
+
 ### Autenticación y autorización
 
 - **Supabase Auth SSR** (cookies). `proxy.ts` renueva la sesión y redirige a `/acceso`
   si falta (chequeo optimista); la autorización real se repite junto a los datos con
   `auth.getUser()` + vínculo `merchant_users` (`modules/identity`).
 - El `merchant_id` **siempre sale de la sesión**, nunca del cliente.
-- Rutas privadas: `/inicio`, `/configuracion` (y `/api/*` con 401/403 propios).
+- Rutas privadas: `/inicio`, `/configuracion`, `/cobro/*` (y `/api/*` con 401/403 propios).
 - Los Route Handlers que mutan usan `withMerchantApi` (comprueba `Origin` y responde
   `Cache-Control: private, no-store`). Los Server Actions ya validan `Origin`.
 - `npm run check:bundle` (tras `build`) falla si un secreto de servidor llega al cliente.
