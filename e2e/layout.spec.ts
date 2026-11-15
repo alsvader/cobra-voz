@@ -38,7 +38,7 @@ test.describe("Layout móvil (DESIGN.md §12)", () => {
 
   test("el CTA principal mide 56px de alto", async ({ page }) => {
     await page.goto("/");
-    const cta = page.getByRole("link", { name: "Entrar a la aplicación" });
+    const cta = page.getByRole("link", { name: "Conoce el piloto" });
     const box = await cta.boundingBox();
     expect(box?.height).toBe(56);
   });
