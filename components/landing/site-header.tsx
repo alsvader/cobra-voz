@@ -1,4 +1,4 @@
-import { headerLinks } from "@/components/landing/content";
+import { headerLinks, loginLink } from "@/components/landing/content";
 import { LandingAnchor } from "@/components/landing/landing-anchor";
 import { MobileNavigation } from "@/components/landing/mobile-navigation";
 
@@ -25,6 +25,12 @@ export function SiteHeader() {
               {link.label}
             </LandingAnchor>
           ))}
+          <LandingAnchor
+            href={loginLink.href}
+            className="inline-flex h-11 cursor-pointer items-center rounded-button bg-primary px-4 text-[15px] font-semibold text-primary-foreground transition-colors duration-150 ease-out-strong hover:bg-teal-700"
+          >
+            {loginLink.label}
+          </LandingAnchor>
         </nav>
         <MobileNavigation />
       </div>

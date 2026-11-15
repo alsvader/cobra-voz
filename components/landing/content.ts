@@ -1,10 +1,19 @@
 /**
  * Copy canónico de CobraVoz Landing Handoff v1.0 (Anexo B).
  * PEND-01 y PEND-02 siguen sin URL: no se inventa correo, WhatsApp ni aviso legal.
+ * El acceso a la aplicación es el login existente (`/acceso`), sin registro público.
  */
+
+import { ROUTES } from "@/lib/routes";
 
 export const contactHref: string | null = null;
 export const privacyHref: string | null = null;
+
+/** Entrada a la aplicación para quien ya tiene cuenta del piloto. */
+export const loginLink = {
+  href: ROUTES.login,
+  label: "Iniciar sesión",
+} as const;
 
 export const contactPendingNote =
   "El canal de contacto todavía no está publicado.";
@@ -27,6 +36,7 @@ export const footerExplore = [
 export const footerHelp = [
   { href: "#preguntas-frecuentes", label: "Preguntas frecuentes" },
   { href: "#contacto", label: "Contacto" },
+  loginLink,
 ] as const;
 
 export const hero = {
@@ -35,7 +45,9 @@ export const hero = {
   description:
     "Di el importe, confirma la cantidad y muestra un QR CoDi para recibir el pago. CobraVoz te avisa cuando el pago está verificado.",
   primaryCta: "Conoce el piloto",
+  primaryHref: loginLink.href,
   secondaryCta: "Cómo funciona",
+  secondaryHref: "#como-funciona",
 } as const;
 
 export const howItWorks = {

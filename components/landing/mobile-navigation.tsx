@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
-import { headerLinks } from "@/components/landing/content";
+import { headerLinks, loginLink } from "@/components/landing/content";
 import { LandingAnchor } from "@/components/landing/landing-anchor";
 
 export function MobileNavigation() {
@@ -73,6 +73,15 @@ export function MobileNavigation() {
               </LandingAnchor>
             </li>
           ))}
+          <li>
+            <LandingAnchor
+              href={loginLink.href}
+              className="flex min-h-11 cursor-pointer items-center text-base font-semibold text-teal-700 transition-colors duration-150 ease-out-strong hover:text-teal-600"
+              onNavigate={() => setOpen(false)}
+            >
+              {loginLink.label}
+            </LandingAnchor>
+          </li>
         </ul>
       </nav>
     </div>

@@ -11,3 +11,4 @@ Registro de diferencias entre las imágenes de `assets/` y la UI. Las imágenes 
 | TR-04 | El paso 02 no dibuja un código QR. El PNG muestra un glifo; un QR de demostración podría parecer cobrable. |
 | PEND-01 | «Contactar al equipo» es un botón con `aria-disabled` y el texto visible «El canal de contacto todavía no está publicado.» No hay correo, WhatsApp ni formulario inventados. |
 | PEND-02 | «Privacidad» se muestra como texto, no como enlace, hasta tener la política real. |
+| ACC-01 | Desde la landing se entra a la app por `/acceso`: «Conoce el piloto», «Iniciar sesión» del header (escritorio y menú móvil) y el mismo enlace en Ayuda del pie. El copy no dice «Registrarse» ni «Comenzar gratis». «Contactar al equipo» sigue sin destino (PEND-01). |

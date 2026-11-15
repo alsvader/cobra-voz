@@ -8,8 +8,9 @@ type LandingAnchorProps = Omit<ComponentProps<"a">, "href"> & {
 };
 
 /**
- * Ancla de la misma página. Mueve el foco al destino y respeta
- * prefers-reduced-motion. El href sigue funcionando sin JavaScript.
+ * Enlace de la landing. Las anclas (`#…`) mueven el foco al destino y
+ * respetan prefers-reduced-motion. Una ruta de la app (por ejemplo
+ * `/acceso`) se deja al navegador. El href funciona sin JavaScript.
  */
 export function LandingAnchor({
   href,
@@ -24,9 +25,9 @@ export function LandingAnchor({
         onClick?.(event);
         if (event.defaultPrevented) return;
         onNavigate?.();
+        if (!href.startsWith("#")) return;
 
-        const id = href.startsWith("#") ? href.slice(1) : "";
-        const target = document.getElementById(id);
+        const target = document.getElementById(href.slice(1));
         if (!target) return;
 
         event.preventDefault();

@@ -59,12 +59,29 @@ describe("Landing del MVP", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("lleva el piloto y el menú a anclas de la misma página", () => {
+  it("lleva a la aplicación desde el hero, el menú y el pie", async () => {
+    const user = userEvent.setup();
     render(<LandingPage />);
 
     expect(
       screen.getByRole("link", { name: "Conoce el piloto" }),
-    ).toHaveAttribute("href", "#contacto");
+    ).toHaveAttribute("href", "/acceso");
+
+    const visibleLogin = screen.getAllByRole("link", {
+      name: "Iniciar sesión",
+    });
+    expect(visibleLogin).toHaveLength(2);
+    for (const link of visibleLogin) {
+      expect(link).toHaveAttribute("href", "/acceso");
+    }
+
+    await user.click(screen.getByRole("button", { name: "Abrir menú" }));
+    const withMenu = screen.getAllByRole("link", { name: "Iniciar sesión" });
+    expect(withMenu).toHaveLength(3);
+    for (const link of withMenu) {
+      expect(link).toHaveAttribute("href", "/acceso");
+    }
+
     expect(
       screen.getAllByRole("link", { name: "Cómo funciona" }).length,
     ).toBeGreaterThan(0);

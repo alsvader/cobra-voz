@@ -90,10 +90,10 @@ export function HeroSection() {
             className="landing-rise flex flex-col gap-3 lg:flex-row"
             style={revealDelay(330)}
           >
-            <MarketingCTA href="#contacto" variant="primary">
+            <MarketingCTA href={hero.primaryHref} variant="primary">
               {hero.primaryCta}
             </MarketingCTA>
-            <MarketingCTA href="#como-funciona" variant="secondary">
+            <MarketingCTA href={hero.secondaryHref} variant="secondary">
               {hero.secondaryCta}
             </MarketingCTA>
           </div>
