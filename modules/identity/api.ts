@@ -4,9 +4,10 @@ import { errorJson, PRIVATE_CACHE_CONTROL } from "@/lib/security/responses";
 import { resolveMerchantContext } from "./session";
 import type { MerchantContext } from "./types";
 
-type MerchantRouteHandler = (
+type MerchantRouteHandler<RouteContext> = (
   request: Request,
   context: MerchantContext,
+  route: RouteContext,
 ) => Promise<Response> | Response;
 
 /**
@@ -18,8 +19,10 @@ type MerchantRouteHandler = (
  * El handler recibe el `merchantId` DERIVADO de la sesión; nunca lo toma del
  * cuerpo ni de la URL. Todas las respuestas salen como no cacheables.
  */
-export function withMerchantApi(handler: MerchantRouteHandler) {
-  return async (request: Request): Promise<Response> => {
+export function withMerchantApi<RouteContext = unknown>(
+  handler: MerchantRouteHandler<RouteContext>,
+) {
+  return async (request: Request, route: RouteContext): Promise<Response> => {
     if (isMutation(request.method) && !isSameOrigin(request)) {
       return errorJson(
         403,
@@ -40,7 +43,7 @@ export function withMerchantApi(handler: MerchantRouteHandler) {
       );
     }
 
-    const response = await handler(request, result.context);
+    const response = await handler(request, result.context, route);
     // Defensa en profundidad: aunque el handler olvide las cabeceras.
     response.headers.set("Cache-Control", PRIVATE_CACHE_CONTROL);
     return response;

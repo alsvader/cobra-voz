@@ -32,6 +32,16 @@ registro público, las cuentas se preconfiguran y se vinculan a un comercio).
 máx. 2 decimales, > 0). P02 (`/cobro/confirmar`) exige la acción explícita
 «Confirmar importe»; `?centavos=` se revalida siempre en el servidor.
 
+### Cobros (PR-05)
+
+`POST /api/charges` crea la intención (idempotente por `idempotencyKey`, persistida
+**antes** de llamar a Pey) y `GET /api/charges/:id` la consulta. El `merchantId`
+sale siempre de la sesión. Repetir la petición devuelve el mismo cobro sin volver
+a llamar a Pey; si Pey no confirma el QR, el cobro queda en `qr_uncertain` y no se
+reintenta a ciegas. En Local/Preview responde el simulador (`adapters/pey`):
+importe **$13.01** fuerza un resultado incierto; en cualquier otro entorno la API
+responde 503 hasta integrar Pey real (H5).
+
 ### Autenticación y autorización
 
 - **Supabase Auth SSR** (cookies). `proxy.ts` renueva la sesión y redirige a `/acceso`

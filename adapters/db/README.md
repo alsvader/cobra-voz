@@ -69,6 +69,15 @@ CI falla si el esquema cambia sin su migración.
 «Generando QR» y «Verificación no disponible» **no** se persisten: son estados
 de interfaz/comunicación. Las transiciones se implementan en PR-05 a PR-08.
 
+Implementadas hasta ahora (`modules/charges`, PR-05):
+
+- `created` → `waiting_payment`: solo con un QR real y válido; la fila `codi_qrs`
+  y el estado se escriben en la misma transacción.
+- `created` → `qr_uncertain` (+ incidencia `qr_creation_uncertain` abierta): Pey
+  no confirmó el QR, la respuesta no es válida o el QR no pudo persistirse.
+  También si un cobro queda en `created` más de 60 s sin resolver.
+- Nunca se reintenta la creación del QR por cuenta propia.
+
 ## Seguridad
 
 - **RLS activo en todas las tablas**, sin políticas, y **privilegios revocados**

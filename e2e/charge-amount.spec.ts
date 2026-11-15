@@ -66,21 +66,6 @@ test.describe("P02 Confirmación del importe", () => {
     ).toBeEnabled();
   });
 
-  test("al confirmar deja constancia sin crear cobro ni QR", async ({
-    page,
-  }) => {
-    await page.getByLabel(AMOUNT_FIELD).fill("150.50");
-    await page.getByRole("button", { name: "Confirmar importe" }).click();
-
-    await expect(
-      page.getByRole("button", { name: "Importe confirmado" }),
-    ).toBeDisabled();
-    await expect(
-      page.getByText(/Todavía no se generó ningún cobro ni QR/),
-    ).toBeVisible();
-    await expect(page.getByRole("img", { name: /qr/i })).toHaveCount(0);
-  });
-
   for (const [typed, message] of [
     ["10.123", /máximo dos decimales/i],
     ["0", /mayor que \$0\.00/i],

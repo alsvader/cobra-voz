@@ -4,12 +4,15 @@
  * Cada prueba crea los suyos con datos únicos, así pueden correr en paralelo.
  */
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { createDb } from "../../adapters/db/create-db";
 import {
+  charges,
+  codiQrs,
   merchantPreferences,
   merchants,
   merchantUsers,
+  paymentIncidents,
 } from "../../adapters/db/schema";
 import { assertLocalDatabase } from "../../scripts/db/local-guard";
 import {
@@ -90,6 +93,18 @@ export async function deleteTenant(tenant: Tenant): Promise<void> {
 
   const { db, close } = connect();
   try {
+    const rows = await db
+      .select({ id: charges.id })
+      .from(charges)
+      .where(eq(charges.merchantId, tenant.merchantId));
+    const chargeIds = rows.map((row) => row.id);
+    if (chargeIds.length > 0) {
+      await db
+        .delete(paymentIncidents)
+        .where(inArray(paymentIncidents.chargeId, chargeIds));
+      await db.delete(codiQrs).where(inArray(codiQrs.chargeId, chargeIds));
+      await db.delete(charges).where(inArray(charges.id, chargeIds));
+    }
     await db
       .delete(merchantPreferences)
       .where(eq(merchantPreferences.merchantId, tenant.merchantId));
@@ -109,6 +124,30 @@ export async function readVoiceAnnouncements(
       .from(merchantPreferences)
       .where(eq(merchantPreferences.merchantId, merchantId));
     return row?.value;
+  } finally {
+    await close();
+  }
+}
+
+/** Cobros del comercio, con su QR y sus incidencias (verificación directa en BD). */
+export async function readCharges(merchantId: string) {
+  const { db, close } = connect();
+  try {
+    const rows = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.merchantId, merchantId));
+    const ids = rows.map((row) => row.id);
+    const qrs = ids.length
+      ? await db.select().from(codiQrs).where(inArray(codiQrs.chargeId, ids))
+      : [];
+    const incidents = ids.length
+      ? await db
+          .select()
+          .from(paymentIncidents)
+          .where(inArray(paymentIncidents.chargeId, ids))
+      : [];
+    return { charges: rows, qrs, incidents };
   } finally {
     await close();
   }
