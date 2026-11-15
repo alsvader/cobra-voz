@@ -14,7 +14,8 @@ import {
   merchants,
   merchantUsers,
 } from "../../adapters/db/schema";
-import { assertLocalDatabase, isLocalUrl } from "./local-guard";
+import { ensureAuthUser, readAuthAdminConfig } from "./auth-admin";
+import { assertLocalDatabase } from "./local-guard";
 
 try {
   process.loadEnvFile(".env.local");
@@ -32,13 +33,14 @@ function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
     throw new Error(
-      `Falta ${name}. Copia .env.example a .env.local y completa los valores locales (npm run db:status).`,
+      `Falta ${name}. Ejecuta npm run db:env para generar .env.local con los valores locales.`,
     );
   }
   return value;
 }
 
-function assertLocalEnvironment(databaseUrl: string, supabaseUrl: string) {
+async function main() {
+  const databaseUrl = requireEnv("DATABASE_URL");
   const appEnv = process.env.NEXT_PUBLIC_APP_ENV ?? "local";
   if (appEnv !== "local") {
     throw new Error(
@@ -46,66 +48,13 @@ function assertLocalEnvironment(databaseUrl: string, supabaseUrl: string) {
     );
   }
   assertLocalDatabase(databaseUrl);
-  if (!isLocalUrl(supabaseUrl)) {
-    throw new Error("Seed rechazado: NEXT_PUBLIC_SUPABASE_URL no es local.");
-  }
-}
 
-type AuthUser = { id: string; email?: string };
-
-/** Crea el usuario por la API admin de GoTrue, o lo reutiliza si ya existe. */
-async function ensureAuthUser(
-  supabaseUrl: string,
-  secretKey: string,
-): Promise<AuthUser> {
-  const headers = {
-    apikey: secretKey,
-    Authorization: `Bearer ${secretKey}`,
-    "Content-Type": "application/json",
-  };
-
-  const created = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      email: DEMO_EMAIL,
-      password: DEMO_PASSWORD,
-      email_confirm: true,
-    }),
+  // También rechaza un Supabase que no sea local.
+  const authAdmin = readAuthAdminConfig();
+  const user = await ensureAuthUser(authAdmin, {
+    email: DEMO_EMAIL,
+    password: DEMO_PASSWORD,
   });
-
-  if (created.ok) {
-    return (await created.json()) as AuthUser;
-  }
-
-  const error = (await created.json().catch(() => ({}))) as {
-    error_code?: string;
-    msg?: string;
-  };
-  if (error.error_code !== "email_exists") {
-    throw new Error(
-      `No se pudo crear el usuario demo (${created.status}): ${error.msg ?? "sin detalle"}`,
-    );
-  }
-
-  const list = await fetch(`${supabaseUrl}/auth/v1/admin/users?per_page=200`, {
-    headers,
-  });
-  const { users } = (await list.json()) as { users: AuthUser[] };
-  const existing = users.find((user) => user.email === DEMO_EMAIL);
-  if (!existing) {
-    throw new Error("El usuario demo existe pero no se pudo localizar.");
-  }
-  return existing;
-}
-
-async function main() {
-  const databaseUrl = requireEnv("DATABASE_URL");
-  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const secretKey = requireEnv("SUPABASE_SECRET_KEY");
-  assertLocalEnvironment(databaseUrl, supabaseUrl);
-
-  const user = await ensureAuthUser(supabaseUrl, secretKey);
   const { db, close } = createDb(databaseUrl, { max: 1 });
 
   try {

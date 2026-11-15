@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { assertLocalDatabase } from "../../scripts/db/local-guard";
 import { createDb, type Database } from "./create-db";
 import { codiQrs, charges, merchants, payments } from "./schema";
@@ -71,6 +72,18 @@ export async function pgErrorFrom(
   throw new Error(
     "Se esperaba un error de Postgres, pero la operación tuvo éxito.",
   );
+}
+
+/**
+ * Crea una fila mínima en `auth.users` (solo dentro de la transacción de
+ * prueba, que se revierte). Basta para satisfacer la FK de `merchant_users`.
+ */
+export async function insertAuthUser(tx: Tx): Promise<string> {
+  const id = randomUUID();
+  await tx.execute(
+    sql`insert into auth.users (id, email) values (${id}, ${`${id}@test.local`})`,
+  );
+  return id;
 }
 
 export async function insertMerchant(tx: Tx) {

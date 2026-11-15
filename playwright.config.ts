@@ -1,5 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Las pruebas con sesión usan Supabase local: se cargan sus variables (.env.local).
+try {
+  process.loadEnvFile(".env.local");
+} catch {
+  // En CI las variables llegan por el entorno.
+}
+
 const PORT = Number(process.env.PORT ?? 3100);
 const baseURL = `http://localhost:${PORT}`;
 

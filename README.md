@@ -23,6 +23,20 @@ npm run db:seed              # comercio demo + usuario demo@cobravoz.local
 npm run dev                  # http://localhost:3000
 ```
 
+Acceso local: `demo@cobravoz.local` / `cobravoz-local-dev` (solo desarrollo; no hay
+registro público, las cuentas se preconfiguran y se vinculan a un comercio).
+
+### Autenticación y autorización
+
+- **Supabase Auth SSR** (cookies). `proxy.ts` renueva la sesión y redirige a `/acceso`
+  si falta (chequeo optimista); la autorización real se repite junto a los datos con
+  `auth.getUser()` + vínculo `merchant_users` (`modules/identity`).
+- El `merchant_id` **siempre sale de la sesión**, nunca del cliente.
+- Rutas privadas: `/inicio`, `/configuracion` (y `/api/*` con 401/403 propios).
+- Los Route Handlers que mutan usan `withMerchantApi` (comprueba `Origin` y responde
+  `Cache-Control: private, no-store`). Los Server Actions ya validan `Origin`.
+- `npm run check:bundle` (tras `build`) falla si un secreto de servidor llega al cliente.
+
 Detalles del modelo de datos, estados y seguridad: [`adapters/db/README.md`](adapters/db/README.md).
 
 ## Scripts
@@ -37,6 +51,7 @@ Detalles del modelo de datos, estados y seguridad: [`adapters/db/README.md`](ada
 | `npm run format` / `format:check` | Prettier                                                   |
 | `npm run db:*`                    | Supabase local, migraciones y seed (ver `adapters/db`)     |
 | `npm run test:db`                 | Pruebas de integración contra Postgres local               |
+| `npm run check:bundle`            | Falla si hay secretos de servidor en el bundle del cliente |
 | `npm run icons`                   | Regenera los iconos temporales de la PWA                   |
 | `npm run check`                   | `lint` + `typecheck` + `test`                              |
 
@@ -46,12 +61,13 @@ La primera vez que se corran los E2E: `npx playwright install chromium`
 ## Estructura
 
 ```
-app/          Rutas (App Router): landing `/` y aplicación del comerciante `/inicio`
+app/          Rutas (App Router): landing `/`, acceso `/acceso`, app `/inicio` y `/configuracion`, `/api`
 components/   UI genérica (shadcn/ui + componentes de DESIGN.md) y PWA
 lib/          Utilidades y configuración pública
 modules/      Dominios del monolito modular (identity, merchant, voice, charges, ...)
 adapters/     Infraestructura externa (db, pey, stt), solo servidor
-e2e/          Pruebas Playwright
+proxy.ts      Renovación de sesión y redirección a /acceso
+e2e/          Pruebas Playwright (las de sesión requieren Supabase local)
 ```
 
 ## Reglas que no se negocian
