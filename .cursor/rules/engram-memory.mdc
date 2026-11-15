@@ -1,0 +1,18 @@
+---
+description: Guardar en Engram cada decisión, convención y descubrimiento de CobraVoz
+alwaysApply: true
+---
+
+# Memoria Engram
+
+Engram es la memoria de este repositorio. No esperes a que te lo pidan.
+
+El proyecto es `alsvader`, fijado en `.engram/config.json`. `mem_current_project` puede decir `cobra-voz` por el remoto de git: no guardes ahí. Ese nombre no tiene historial y parte la memoria. Busca y guarda solo en `alsvader`.
+
+Al empezar una sesión llama `mem_context` y `mem_search` (decisiones de CobraVoz, el PR o el tema) antes de rehacer trabajo ya hecho. El registro vigente es `cobravoz/standing-decisions`.
+
+Después de una decisión, convención, preferencia confirmada o rechazada, bug con causa, descubrimiento no obvio o un PR terminado, llama `mem_save` con `project: "alsvader"`. Mismo tema, mismo `topic_key` (`cobravoz/...`). Temas distintos, claves distintas. Si pide juicio, resuélvelo con `mem_judge` o `mem_judge_many`.
+
+`content`: **What**, **Why**, **Where** (rutas del repo, sin rutas absolutas), **Learned**. Sin secretos, tokens ni datos bancarios.
+
+Al cerrar la sesión, `mem_session_summary` con `project: "alsvader"`.
