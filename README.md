@@ -1,18 +1,100 @@
 # CobraVoz
 
-PWA para que pequeños comerciantes de México cobren con CoDi dictando el
-importe. Cobra fácilmente, sin dejar de atender tu negocio.
+**Cobra fácilmente, sin dejar de atender tu negocio.**
 
-La fuente de verdad está en [`docs/`](docs): PRD, UX, arquitectura, `DESIGN.md`
-e `IMPLEMENTATION_PLAN.md` (orden de trabajo por hitos y PR).
+PWA para pequeños comercios de México. Dictas o escribes un importe, lo confirmas y muestras un código CoDi. El pago cuenta cuando el banco lo verifica.
 
-## Requisitos
+<p align="center">
+  <img src="docs/readme/inicio.png" width="280" alt="Inicio de CobraVoz: micrófono para cobrar, total del día y movimientos recientes">
+</p>
+
+Las capturas son del comercio de demostración en local.
+
+## Qué es
+
+CobraVoz es una aplicación web instalable. El comerciante cobra por CoDi con la voz, o con el teclado, como entrada del importe. Pey genera el código. CobraVoz sigue el cobro, muestra el resultado y guarda las ventas del día.
+
+CobraVoz no procesa tarjetas, no mueve fondos por su cuenta y no sustituye un punto de venta. Es la interfaz de cobro y de seguimiento sobre Pey y CoDi.
+
+## Para quién
+
+Para quien atiende solo un puesto de comida, una fonda o un tianguis: muchos cobros chicos, el teléfono en la mano y poco tiempo para una caja. El mismo ritmo vale para quien vende en un mercado.
+
+## Qué hace
+
+- **Cobrar por voz o a mano.** En Inicio se mantiene pulsado el micrófono, o se escribe el importe.
+- **Confirmar antes del código.** La cifra se revisa y se corrige. El QR no se pide hasta pulsar «Confirmar importe».
+- **Mostrar el cobro.** Importe, referencia, código y tiempo restante. En local el QR se rotula como prueba.
+- **Esperar al banco.** «Consultar nuevamente» lee el estado guardado. «Cerrar cobro» solo cierra la pantalla: no cancela el pago en el banco.
+- **Ver el día.** El total y el historial suman únicamente pagos conciliados.
+
+## Cómo funciona
+
+1. En Inicio dices el importe, o eliges «Ingresar importe manualmente».
+2. CobraVoz muestra la cantidad. Si la voz no se entiende, vuelves a hablar o la escribes. No se asume un monto.
+3. Pulsas «Confirmar importe». Esa acción crea la intención de cobro.
+4. Si Pey responde, la pantalla de cobro muestra el QR. El importe de esa solicitud ya no cambia.
+5. El cliente paga con su app bancaria.
+6. Un aviso firmado, o una conciliación que coincide en código, importe, referencia y cuenta, marca el cobro como pagado. Un aviso que no coincide queda como incidencia y no entra en las ventas.
+7. Al volver a Inicio o a Ventas, el pago conciliado aparece en el total del día.
+
+<p align="center">
+  <img src="docs/readme/recorrido.gif" width="280" alt="Recorrido de un cobro: Inicio, confirmar $150.00 y el QR de prueba en espera">
+</p>
+
+El recorrido de arriba usa la captura manual de $150.00 en el simulador local.
+
+### Así está el piloto
+
+- En local y en preview responde el simulador, aunque exista una clave de Pey. El QR dice «QR de prueba · no sirve para pagar». El importe **$13.01** deja la creación en estado incierto.
+- En producción, con `PEY_API_KEY`, el QR bancario es siempre de **$0.01**. El importe confirmado en la app se guarda y se muestra como la venta de ejemplo. El banco mueve un centavo, y ese centavo concilia el cobro.
+- La preferencia «Anunciar pagos» se guarda en Configuración. El aviso que hoy confirma un pago es el de la pantalla.
+
+## Recorrido
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/readme/acceso.png" width="240" alt="Pantalla de acceso con correo y contraseña">
+      <br><strong>Acceso</strong>
+      <br>La cuenta llega configurada. No hay registro público.
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/readme/confirmar.png" width="240" alt="Confirmación del importe en $150.00 antes de generar el QR">
+      <br><strong>Confirmación</strong>
+      <br>La cifra se ve grande y se confirma a mano.
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/readme/cobro.png" width="240" alt="Cobro CoDi en espera, con QR de prueba, referencia y tiempo restante">
+      <br><strong>Cobro</strong>
+      <br>El código, la referencia y el tiempo que queda.
+    </td>
+    <td align="center">
+      <img src="docs/readme/ventas.png" width="240" alt="Ventas con el total del día y el historial de movimientos">
+      <br><strong>Ventas</strong>
+      <br>Total del día e historial. Solo suma lo conciliado.
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/readme/configuracion.png" width="240" alt="Configuración del comercio, la cuenta receptora y la preferencia de audio">
+      <br><strong>Configuración</strong>
+      <br>Comercio, cuenta receptora y preferencia de audio.
+    </td>
+    <td></td>
+  </tr>
+</table>
+
+## Cómo ejecutarlo
+
+### Requisitos
 
 - Node.js ≥ 22 (desarrollado con 24) y npm.
+- Docker en marcha, para Supabase local.
 
-## Empezar
-
-Requiere Docker en marcha (Supabase local).
+### Empezar
 
 ```bash
 npm install
@@ -38,9 +120,11 @@ máx. 2 decimales, > 0). P02 (`/cobro/confirmar`) exige la acción explícita
 **antes** de llamar a Pey) y `GET /api/charges/:id` la consulta. El `merchantId`
 sale siempre de la sesión. Repetir la petición devuelve el mismo cobro sin volver
 a llamar a Pey; si Pey no confirma el QR, el cobro queda en `qr_uncertain` y no se
-reintenta a ciegas. En Local/Preview responde el simulador (`adapters/pey`):
-importe **$13.01** fuerza un resultado incierto; en cualquier otro entorno la API
-responde 503 hasta integrar Pey real (H5).
+reintenta a ciegas. En Local/Preview responde el simulador (`adapters/pey`), aunque
+exista `PEY_API_KEY`: el importe **$13.01** fuerza un resultado incierto. En
+producción, con `PEY_API_KEY`, el cliente es el real y el QR bancario es de
+**$0.01**. Sin clave, fuera de local y preview, `POST /api/charges` responde 503
+y no crea la intención.
 
 P03 (`/cobro/[id]`) es una sola pantalla con variantes según el estado **persistido**:
 generando QR, esperando pago (QR dibujado localmente desde el `qrString` guardado,
@@ -67,7 +151,8 @@ vale y el aviso coincide en QR, importe, referencia numérica y cuenta, el cobro
 pasa a `paid` en la misma transacción, también si ya estaba vencido o cerrado en
 local. Un importe, cuenta o referencia distintos deja el pago como incidencia y
 no lo cuenta como venta. El mismo `webhook-id` o el mismo `transactionId` no
-crean otro pago. La consulta a Pey para recuperar un aviso perdido es PR-08.
+crean otro pago. Si el aviso no llega, la conciliación (PR-08) consulta a Pey y
+acredita el cobro solo cuando la evidencia coincide.
 
 ### Autenticación y autorización
 
@@ -120,3 +205,13 @@ e2e/          Pruebas Playwright (las de sesión requieren Supabase local)
 - Nunca se crea un QR ni se confirma un pago a partir de la transcripción de voz.
 - Claves de Pey, OpenAI y base de datos solo en servidor (jamás `NEXT_PUBLIC_*`).
 - El adaptador Pey simulado solo existe en Local/Preview.
+
+## Documentación
+
+La fuente de verdad del producto está en [`docs/`](docs):
+
+- [PRD v1.0](docs/CobraVoz_PRD_v1.0.md)
+- [Especificación de UX](docs/CobraVoz_UX_Specification_v1.0.md)
+- [Arquitectura](docs/CobraVoz_Architecture_Specification_v1.0.md)
+- [DESIGN.md](docs/DESIGN.md)
+- [Plan de implementación](docs/IMPLEMENTATION_PLAN.md)
