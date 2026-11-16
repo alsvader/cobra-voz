@@ -68,6 +68,25 @@ export function parseAmountToCents(input: string): ParsedAmount {
   return { ok: true, cents };
 }
 
+/**
+ * Número JSON de pesos, como lo manda Pey, a centavos.
+ * El valor ya pasó por punto flotante al parsear: solo vale si queda a menos
+ * de una milésima de peso de un importe de dos decimales. `0.01` → 1.
+ */
+export function pesosNumberToCents(amount: number): ParsedAmount {
+  if (!Number.isFinite(amount)) return { ok: false, error: "invalid_format" };
+  if (amount <= 0) return { ok: false, error: "not_positive" };
+  const cents = Math.round(amount * 100);
+  if (!Number.isSafeInteger(cents) || cents > MAX_AMOUNT_CENTS) {
+    return { ok: false, error: "too_large" };
+  }
+  if (cents <= 0) return { ok: false, error: "not_positive" };
+  if (Math.abs(amount - cents / 100) > 0.001) {
+    return { ok: false, error: "too_many_decimals" };
+  }
+  return { ok: true, cents };
+}
+
 /** Valida un entero de centavos ya calculado (p. ej. recibido por URL o API). */
 export function isValidAmountCents(value: unknown): value is number {
   return (

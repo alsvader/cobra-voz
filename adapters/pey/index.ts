@@ -1,5 +1,8 @@
 import { createMockPeyAdapter } from "./mock";
+import { createRealPeyAdapter } from "./real";
 import type { PeyAdapter } from "./types";
+
+export { REAL_QR_AMOUNT_CENTS } from "./contract";
 
 export type {
   CreateQrOutcome,
@@ -37,20 +40,24 @@ let cachedMock: PeyAdapter | undefined;
 
 /**
  * Elige el adaptador.
- * - Local/Preview → simulador.
- * - Cualquier otro caso → bloqueado hasta integrar Pey real (H5), en lugar de
- *   devolver QR falsos.
+ * - Local/Preview → simulador, aunque exista `PEY_API_KEY`.
+ * - Producción con `PEY_API_KEY` → cliente real. El QR que crea es de $0.01.
+ * - Cualquier otro caso → bloqueado, en lugar de devolver QR falsos.
  */
 export function getPeyAdapter(
   env: Env = {
     NEXT_PUBLIC_APP_ENV: process.env.NEXT_PUBLIC_APP_ENV,
     VERCEL_ENV: process.env.VERCEL_ENV,
+    PEY_API_KEY: process.env.PEY_API_KEY,
   },
 ): PeyAdapter {
   if (isMockPeyAllowed(env)) {
     cachedMock ??= createMockPeyAdapter();
     return cachedMock;
   }
+
+  const apiKey = env.PEY_API_KEY?.trim();
+  if (apiKey) return createRealPeyAdapter({ apiKey });
 
   throw new PeyNotConfiguredError(
     "La integración con Pey no está configurada en este entorno.",

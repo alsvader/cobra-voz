@@ -8,6 +8,7 @@ import {
   paymentIncidents,
   payments,
 } from "@/adapters/db/schema";
+import { REAL_QR_AMOUNT_CENTS } from "@/adapters/pey/contract";
 import type { PeyPaymentNotice } from "./schema";
 
 const PROVIDER = "pey";
@@ -51,7 +52,9 @@ type RecordOptions = {
  * - El mismo `webhook-id` no aplica el negocio dos veces.
  * - El mismo `transactionId` no crea dos pagos, aunque llegue en otra entrega.
  * - Solo un aviso que coincide en QR, importe, referencia y cuenta deja el
- *   cobro en `paid`. Un pago tardío (cobro vencido o cerrado en local) también,
+ *   cobro en `paid`. Un pago de exactamente un centavo también: es el importe
+ *   del QR real, aunque el cobro guarde el importe capturado en la app.
+ *   Un pago tardío (cobro vencido o cerrado en local) también cuenta,
  *   porque vencido no es rechazado.
  * - Una discrepancia guarda el pago como incidencia y no lo cuenta como venta.
  * - Un QR desconocido no inventa un cobro: solo queda el evento y la incidencia.
@@ -227,7 +230,10 @@ function mismatchesOf(
   qr: { amountCents: number; numRef: number; bankAccountId: string },
 ): Mismatch[] {
   const found: Mismatch[] = [];
-  if (notice.amountCents !== qr.amountCents) found.push("amount_mismatch");
+  const hackathonCent = notice.amountCents === REAL_QR_AMOUNT_CENTS;
+  if (notice.amountCents !== qr.amountCents && !hackathonCent) {
+    found.push("amount_mismatch");
+  }
   if (notice.numRef !== qr.numRef) found.push("reference_mismatch");
   if (notice.bankAccountId !== qr.bankAccountId) found.push("account_mismatch");
   return found;

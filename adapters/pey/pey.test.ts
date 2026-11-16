@@ -141,4 +141,27 @@ describe("getPeyAdapter — el simulador nunca llega a producción", () => {
     expect(isMockPeyAllowed(env)).toBe(false);
     expect(() => getPeyAdapter(env)).toThrow(PeyNotConfiguredError);
   });
+
+  it("en local ignora la API key y sigue con el simulador", () => {
+    const env = { NEXT_PUBLIC_APP_ENV: "local", PEY_API_KEY: "pey-live-key" };
+    expect(getPeyAdapter(env).kind).toBe("mock");
+  });
+
+  it("en producción, con API key, usa el cliente real", () => {
+    const env = {
+      NEXT_PUBLIC_APP_ENV: "production",
+      VERCEL_ENV: "production",
+      PEY_API_KEY: " pey-live-key ",
+    };
+    expect(getPeyAdapter(env).kind).toBe("real");
+  });
+
+  it("en producción, sin API key, sigue bloqueado", () => {
+    const env = {
+      NEXT_PUBLIC_APP_ENV: "production",
+      VERCEL_ENV: "production",
+      PEY_API_KEY: "  ",
+    };
+    expect(() => getPeyAdapter(env)).toThrow(PeyNotConfiguredError);
+  });
 });

@@ -1,18 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import {
-  charges,
-  codiQrs,
-  merchants,
-  payments,
-} from "@/adapters/db/schema";
+import { charges, codiQrs, merchants, payments } from "@/adapters/db/schema";
 import { createTestDb } from "@/adapters/db/testing";
-import {
-  getDailySummary,
-  getMovementDetail,
-  listMovements,
-} from "./service";
+import { getDailySummary, getMovementDetail, listMovements } from "./service";
 
 const { db, close } = createTestDb();
 const merchantIds: string[] = [];
@@ -40,6 +31,8 @@ async function addCharge(
     expiresAt?: Date | null;
     paidAt?: Date | null;
     reconciliationStatus?: "reconciled" | "incident";
+    /** Importe del pago. Si no viene, es el mismo que el cobro. */
+    receivedCents?: number;
   } = {},
 ) {
   const amountCents = options.amountCents ?? 15050;
@@ -52,7 +45,10 @@ async function addCharge(
       idempotencyKey: randomUUID(),
       status: "waiting_payment",
       createdAt,
-      expiresAt: options.expiresAt === undefined ? new Date(createdAt.getTime() + 600_000) : options.expiresAt,
+      expiresAt:
+        options.expiresAt === undefined
+          ? new Date(createdAt.getTime() + 600_000)
+          : options.expiresAt,
     })
     .returning();
 
@@ -68,13 +64,14 @@ async function addCharge(
       })
       .returning();
     if (options.paidAt || options.reconciliationStatus) {
-      const reconciled = (options.reconciliationStatus ?? "reconciled") === "reconciled";
+      const reconciled =
+        (options.reconciliationStatus ?? "reconciled") === "reconciled";
       const [payment] = await db
         .insert(payments)
         .values({
           codiQrId: qr.id,
           providerTransactionId: `tx-${randomUUID()}`,
-          amountCents,
+          amountCents: options.receivedCents ?? amountCents,
           reconciliationStatus: reconciled ? "reconciled" : "incident",
           evidenceSource: "webhook",
           paidAt: options.paidAt ?? createdAt,
@@ -150,10 +147,7 @@ describe("getDailySummary", () => {
     });
     await addCharge(merchant.id, { status: "waiting_payment" });
 
-    const summary = await getDailySummary(
-      { db, now: () => NOON },
-      merchant.id,
-    );
+    const summary = await getDailySummary({ db, now: () => NOON }, merchant.id);
 
     expect(summary).toEqual({ totalCents: 10000, count: 1 });
   });
@@ -194,20 +188,17 @@ describe("listMovements", () => {
       paidAt: new Date("2026-11-15T21:00:00.000Z"),
     });
 
-    const first = await listMovements(
-      { db, now: () => NOON },
-      merchant.id,
-      { limit: 2 },
-    );
+    const first = await listMovements({ db, now: () => NOON }, merchant.id, {
+      limit: 2,
+    });
     if (!first.ok) throw new Error("cursor");
     expect(first.movements.map((row) => row.id)).toEqual([newer, pending]);
     expect(first.movements[1].status).toBe("waiting_payment");
 
-    const second = await listMovements(
-      { db, now: () => NOON },
-      merchant.id,
-      { limit: 2, cursor: first.nextCursor },
-    );
+    const second = await listMovements({ db, now: () => NOON }, merchant.id, {
+      limit: 2,
+      cursor: first.nextCursor,
+    });
     if (!second.ok) throw new Error("cursor");
     expect(second.movements.map((row) => row.id)).toEqual([older]);
     expect(second.nextCursor).toBeNull();
@@ -270,6 +261,26 @@ describe("getMovementDetail", () => {
       requestedCents: 8000,
       receivedCents: null,
       paidLabel: null,
+    });
+  });
+
+  it("muestra el importe capturado y suma solo el centavo recibido", async () => {
+    const merchant = await newMerchant();
+    const id = await addCharge(merchant.id, {
+      amountCents: 15050,
+      receivedCents: 1,
+      paidAt: NOON,
+    });
+
+    const summary = await getDailySummary({ db, now: () => NOON }, merchant.id);
+    const page = await listMovements({ db, now: () => NOON }, merchant.id);
+    const detail = await getMovementDetail({ db }, merchant.id, id);
+
+    expect(summary).toEqual({ totalCents: 1, count: 1 });
+    expect(page.ok && page.movements[0].amountCents).toBe(15050);
+    expect(detail).toMatchObject({
+      requestedCents: 15050,
+      receivedCents: 1,
     });
   });
 

@@ -40,14 +40,14 @@ export type CreateQrOutcome =
  * Pago que Pey reporta al consultar un QR que CobraVoz YA conoce.
  * El adaptador solo devuelve pagos de ESE `peyQrId`: el servicio no acepta
  * un identificador distinto ni inventa uno que Pey nunca entregó.
- * `amountCents` ya es entero; la implementación real (H5) convierte el texto
- * de Pey antes de cruzar esta frontera, sin pasar por punto flotante.
+ * `amountCents` ya es entero. La lista vigente de Pey no repite referencia ni
+ * cuenta: esos campos llegan en null y la conciliación usa los del QR guardado.
  */
 export type QueriedPayment = {
   transactionId: string;
   amountCents: number;
-  numRef: number;
-  bankAccountId: string;
+  numRef: number | null;
+  bankAccountId: string | null;
   paidAt: Date;
 };
 

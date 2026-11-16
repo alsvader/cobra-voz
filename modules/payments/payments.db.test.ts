@@ -238,6 +238,34 @@ describe("recordPeyPayment", () => {
     expect(incidents.map((item) => item.type)).toEqual(["amount_mismatch"]);
   });
 
+  it("un aviso de un centavo cierra el cobro y conserva el importe capturado", async () => {
+    const merchant = await newMerchant();
+    const { charge, qr, account } = await waitingCharge(
+      merchant.id,
+      merchant.peyBankAccountId,
+    );
+
+    const result = await recordPeyPayment(
+      { db },
+      webhook(),
+      notice(qr, account, { amountCents: 1 }),
+    );
+
+    expect(result).toEqual({ outcome: "paid", duplicate: false });
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, charge.id));
+    expect(row.status).toBe("paid");
+    expect(row.amountCents).toBe(15050);
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.codiQrId, qr.id));
+    expect(payment.amountCents).toBe(1);
+    expect(payment.reconciliationStatus).toBe("reconciled");
+  });
+
   it("una cuenta o referencia distinta tampoco acredita el cobro", async () => {
     const merchant = await newMerchant();
     const { charge, qr, account } = await waitingCharge(

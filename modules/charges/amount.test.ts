@@ -7,6 +7,7 @@ import {
   isValidAmountCents,
   parseAmountToCents,
   parseCentsParam,
+  pesosNumberToCents,
   spokenMxn,
 } from "./amount";
 
@@ -34,6 +35,25 @@ describe("parseAmountToCents — importes válidos", () => {
     expect(parseAmountToCents("19.99")).toEqual({ ok: true, cents: 1999 });
     expect(parseAmountToCents("1.15")).toEqual({ ok: true, cents: 115 });
     expect(parseAmountToCents("4.35")).toEqual({ ok: true, cents: 435 });
+  });
+});
+
+describe("pesosNumberToCents", () => {
+  it.each([
+    [0.01, 1],
+    [150.5, 15050],
+    [1, 100],
+    [0.29, 29],
+    [19.99, 1999],
+  ])("%s pesos → %i centavos", (pesos, cents) => {
+    expect(pesosNumberToCents(pesos)).toEqual({ ok: true, cents });
+  });
+
+  it("rechaza cero y un número que no es de dos decimales", () => {
+    expect(pesosNumberToCents(0).ok).toBe(false);
+    expect(pesosNumberToCents(-1).ok).toBe(false);
+    expect(pesosNumberToCents(10.555).ok).toBe(false);
+    expect(pesosNumberToCents(Number.NaN).ok).toBe(false);
   });
 });
 

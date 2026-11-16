@@ -120,19 +120,21 @@
 
 ### H5 — Integración Pey real y validación bancaria
 
-**Meta:** sustituir el adaptador simulado en producción con la API real y probar pagos de importe pequeño.
+**Meta:** sustituir el adaptador simulado en producción con la API real y probar un pago real de $0.01.
+
+**Regla del hackathon:** el QR que se envía a Pey es siempre $0.01 (1 centavo), tanto si el importe se capturó a mano como por voz. El importe confirmado en la app se guarda en el cobro y se muestra como la venta de ejemplo. El banco solo mueve $0.01; ese es el importe recibido. Un pago bancario de exactamente 1 centavo concilia el cobro y no se trata como diferencia de importe.
 
 **Tareas**
 - [ ] Configurar API key Pey privada, cuenta receptora preconfigurada y webhook HTTPS estable.
-- [ ] Integrar `POST /codi/qr` (importe en pesos, `numRef` numérico ≤7 caracteres, `expiration` inicial 600 s, `metadata` con referencia interna, `generateImage=false`).
-- [ ] Persistir `pey_qr_id`, `qrString`, metadatos y vencimiento; generar QR escaneable real con zona quieta.
-- [ ] Implementar `GET /transaction/codi/qr/:id` con paginación y, cuando exista ID, `GET /transaction/:id`.
-- [ ] Confrontar payloads reales de Pey contra contratos antes de inferir nombres, estados o campos opcionales.
+- [x] Integrar `POST /codi/qr` (`amount` fijo `0.01`, `numRef` numérico ≤7 caracteres, `expiration` inicial 600 s, `metadata` con referencia interna, `generateImage=false`). El importe capturado no se sustituye en `charges.amount_cents`.
+- [x] Persistir `pey_qr_id`, `qrString`, metadatos y vencimiento; generar QR escaneable real con zona quieta.
+- [x] Implementar `GET /transaction/codi/qr/:id` con paginación y, cuando exista ID, `GET /transaction/:id`.
+- [x] Confrontar payloads reales de Pey contra contratos antes de inferir nombres, estados o campos opcionales.
 - [ ] Probar webhook firmado real y consulta de respaldo; conservar procesamiento igual de idempotente que en H3.
-- [ ] Documentar comportamiento bajo timeout sin `pey_qr_id`; **bloquear reintento ciego** mientras Pey no confirme recuperación/idempotencia.
-- [ ] Hacer cobro real controlado de importe pequeño con evidencia de recepción bancaria, base de datos, P03 y P04.
+- [x] Documentar comportamiento bajo timeout sin `pey_qr_id`; **bloquear reintento ciego** mientras Pey no confirme recuperación/idempotencia.
+- [ ] Hacer un cobro real controlado: el QR es de $0.01 y el cobro guardado conserva el importe capturado en la app.
 
-**Gate:** al menos un pago CoDi real llega, se verifica una sola vez, aparece en Ventas y puede recuperarse tras cerrar/reabrir la PWA; no quedan éxitos financieros falsos.
+**Gate:** al menos un pago CoDi de $0.01 llega, se verifica una sola vez, el movimiento muestra el importe capturado y el detalle muestra $0.01 recibido; se recupera tras cerrar/reabrir la PWA. El total del día suma el dinero recibido, no el importe de ejemplo.
 
 ### H6 — Voz (STT + parser + anuncio audible)
 

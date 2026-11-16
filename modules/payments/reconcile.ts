@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "@/adapters/db/create-db";
-import { charges, codiQrs } from "@/adapters/db/schema";
+import { charges, codiQrs, merchants } from "@/adapters/db/schema";
 import type { PeyAdapter, QueriedPayment } from "@/adapters/pey/types";
 import { MAX_AMOUNT_CENTS } from "@/modules/charges/amount";
 import {
@@ -65,11 +65,13 @@ function usablePayment(payment: QueriedPayment): boolean {
     Number.isInteger(payment.amountCents) &&
     payment.amountCents > 0 &&
     payment.amountCents <= MAX_AMOUNT_CENTS &&
-    Number.isInteger(payment.numRef) &&
-    payment.numRef >= 0 &&
-    payment.numRef <= 9_999_999 &&
-    typeof payment.bankAccountId === "string" &&
-    payment.bankAccountId.trim().length > 0 &&
+    (payment.numRef === null ||
+      (Number.isInteger(payment.numRef) &&
+        payment.numRef >= 0 &&
+        payment.numRef <= 9_999_999)) &&
+    (payment.bankAccountId === null ||
+      (payment.bankAccountId.trim().length > 0 &&
+        payment.bankAccountId.trim().length <= 128)) &&
     payment.paidAt instanceof Date &&
     !Number.isNaN(payment.paidAt.getTime())
   );
@@ -183,6 +185,20 @@ async function applyPayments(
     return { ok: false, error: "not_reconcilable", charge: settled.charge };
   }
 
+  const [known] = await deps.db
+    .select({
+      numRef: codiQrs.numRef,
+      bankAccountId: merchants.peyBankAccountId,
+    })
+    .from(codiQrs)
+    .innerJoin(charges, eq(charges.id, codiQrs.chargeId))
+    .innerJoin(merchants, eq(merchants.id, charges.merchantId))
+    .where(eq(codiQrs.peyQrId, peyQrId))
+    .limit(1);
+  if (!known) {
+    return { ok: false, error: "not_reconcilable", charge: settled.charge };
+  }
+
   for (const payment of payments) {
     if (!usablePayment(payment)) continue;
     await recordPeyPayment(
@@ -192,8 +208,8 @@ async function applyPayments(
         transactionId: payment.transactionId.trim(),
         codiQrId: peyQrId,
         amountCents: payment.amountCents,
-        numRef: payment.numRef,
-        bankAccountId: payment.bankAccountId.trim(),
+        numRef: payment.numRef ?? known.numRef,
+        bankAccountId: payment.bankAccountId?.trim() || known.bankAccountId,
         paidAt: payment.paidAt,
       },
       { evidenceSource: "provider_query" },

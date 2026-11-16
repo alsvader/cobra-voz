@@ -1,24 +1,32 @@
 import { z } from "zod";
-import { parseAmountToCents } from "@/modules/charges/amount";
+import {
+  parseAmountToCents,
+  pesosNumberToCents,
+} from "@/modules/charges/amount";
 
 /**
- * Aviso de pago que CobraVoz acepta de Pey. Contrato PROVISIONAL: la
- * arquitectura nombra estos campos (`codi.qr.payment_received`, `transactionId`,
- * `codiQrId`, importe, referencia y cuenta) pero el payload real se confronta
- * en H5 antes de aflojar esto. El importe llega como texto con máximo dos
- * decimales: un número JSON se rechaza para no pasar por punto flotante.
+ * Aviso de pago de Pey. La documentación vigente (webhook `codi.qr.payment_received`,
+ * noviembre 2026) manda `amount` numérico en pesos, `numRef` como texto,
+ * `datePaid` en segundos Unix y campos extra (`apiKeyId`, `concept`, `metadata`).
+ * Se siguen aceptando `amount` en texto y `paidAt` ISO: es la forma que ya
+ * usan las pruebas locales. Un número que no cae en dos decimales se rechaza.
  */
-export const peyPaymentNoticeSchema = z.strictObject({
+const peyPaymentNoticeSchema = z.object({
   type: z.literal("codi.qr.payment_received"),
   transactionId: z.string().trim().min(1).max(128),
   codiQrId: z.string().trim().min(1).max(128),
-  amount: z.string().trim(),
-  numRef: z.number().int().min(0).max(9_999_999),
+  amount: z.union([z.string().trim().min(1), z.number()]),
+  numRef: z.union([
+    z.number().int().min(0).max(9_999_999),
+    z.string().regex(/^[0-9]{1,7}$/),
+  ]),
   bankAccountId: z.string().trim().min(1).max(128),
-  paidAt: z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
-    error: "Fecha de pago no válida.",
-  }),
+  paidAt: z.string().optional(),
+  datePaid: z.number().optional(),
 });
+
+const MIN_UNIX_SECONDS = 1_500_000_000;
+const MAX_UNIX_SECONDS = 4_000_000_000;
 
 export type PeyPaymentNotice = {
   transactionId: string;
@@ -34,17 +42,50 @@ export function parsePeyPaymentNotice(
 ): { ok: true; notice: PeyPaymentNotice } | { ok: false } {
   const parsed = peyPaymentNoticeSchema.safeParse(body);
   if (!parsed.success) return { ok: false };
-  const amount = parseAmountToCents(parsed.data.amount);
-  if (!amount.ok) return { ok: false };
+
+  const amountCents = noticeAmountCents(parsed.data.amount);
+  const paidAt = noticePaidAt(parsed.data);
+  if (amountCents == null || !paidAt) return { ok: false };
+
   return {
     ok: true,
     notice: {
       transactionId: parsed.data.transactionId,
       codiQrId: parsed.data.codiQrId,
-      amountCents: amount.cents,
-      numRef: parsed.data.numRef,
+      amountCents,
+      numRef:
+        typeof parsed.data.numRef === "number"
+          ? parsed.data.numRef
+          : Number(parsed.data.numRef),
       bankAccountId: parsed.data.bankAccountId,
-      paidAt: new Date(parsed.data.paidAt),
+      paidAt,
     },
   };
+}
+
+function noticeAmountCents(amount: string | number): number | null {
+  if (typeof amount === "number") {
+    const parsed = pesosNumberToCents(amount);
+    return parsed.ok ? parsed.cents : null;
+  }
+  const parsed = parseAmountToCents(amount);
+  return parsed.ok ? parsed.cents : null;
+}
+
+function noticePaidAt(data: {
+  paidAt?: string;
+  datePaid?: number;
+}): Date | null {
+  if (data.datePaid != null) {
+    if (
+      !Number.isInteger(data.datePaid) ||
+      data.datePaid < MIN_UNIX_SECONDS ||
+      data.datePaid > MAX_UNIX_SECONDS
+    ) {
+      return null;
+    }
+    return new Date(data.datePaid * 1000);
+  }
+  if (!data.paidAt || Number.isNaN(Date.parse(data.paidAt))) return null;
+  return new Date(data.paidAt);
 }

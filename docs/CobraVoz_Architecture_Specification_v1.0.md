@@ -175,6 +175,8 @@ sequenceDiagram
 - `metadata`: UUID interno de charge para correlación; `bankAccountId` si es necesario para seleccionar la cuenta ya registrada.
 - Persistir `pey_qr_id` y `qr_payload` devueltos por Pey antes de exponerlos como listos.
 
+Contrato cotejado el 2026-11-16 con el OpenAPI de Pey del 2026-10-20. En el QR real, `amount` es siempre `0.01`: el importe capturado se queda en el cobro. `numRef` se envía como texto de dígitos. El webhook documentado trae `amount` numérico, `numRef` texto, `datePaid` en segundos Unix y `bankAccountId` cuando se envió al crear. `GET /transaction/codi/qr/:id` no repite referencia ni cuenta; un pago de esa lista se concilia con las del QR guardado. Un aviso de exactamente 1 centavo cierra el cobro.
+
 **Incertidumbre no resuelta:** Pey no tiene documentado en la especificación aprobada un parámetro de idempotencia para creación ni recuperación segura de QR cuyo identificador no fue recibido. Si hay timeout, **no repetir ciegamente**. Validar antes de automatizar y tratar el incidente como pendiente de investigación.
 
 ## 8. Proceso C — Webhook → pago
