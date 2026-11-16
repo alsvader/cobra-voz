@@ -34,7 +34,10 @@ describe("cliente Pey real", () => {
 
     const outcome = await pey.createCodiQr(request);
 
-    expect(outcome.status).toBe("uncertain");
+    expect(outcome).toEqual({
+      status: "uncertain",
+      reason: "Pey no confirmó la creación del QR (HTTP 500).",
+    });
     expect(calls).toHaveLength(1);
     const body = String(calls[0].init.body);
     expect(body).toMatch(/"amount":0\.01[,}]/);
@@ -78,6 +81,30 @@ describe("cliente Pey real", () => {
       peyQrId: "AB12CD34EF",
       qrString: '{"TYP":1,"IDC":"AB12CD34EF"}',
       expiresAt: new Date("2026-11-16T06:10:00.000Z"),
+    });
+  });
+
+  it("un rechazo de Pey deja el status y el tipo de error, sin el mensaje", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      fetch: async () =>
+        jsonResponse(
+          {
+            error: {
+              message: "API key does not have CoDi enabled",
+              type: "INVALID_STATE",
+              requestId: "abc",
+            },
+          },
+          400,
+        ),
+    });
+
+    const outcome = await pey.createCodiQr(request);
+
+    expect(outcome).toEqual({
+      status: "uncertain",
+      reason: "Pey no confirmó la creación del QR (HTTP 400, INVALID_STATE).",
     });
   });
 

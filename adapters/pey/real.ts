@@ -81,10 +81,17 @@ export function createRealPeyAdapter(options: RealPeyOptions): PeyAdapter {
         headers: { "Content-Type": "application/json" },
         body,
       });
-      if (!response || response.status !== 201) {
+      if (!response) {
         return {
           status: "uncertain",
-          reason: "Pey no confirmó la creación del QR.",
+          reason: "Pey no respondió al crear el QR.",
+        };
+      }
+      if (response.status !== 201) {
+        const errorType = peyErrorType(await readJson(response));
+        return {
+          status: "uncertain",
+          reason: `Pey no confirmó la creación del QR (HTTP ${response.status}${errorType ? `, ${errorType}` : ""}).`,
         };
       }
 
@@ -333,6 +340,16 @@ function readAccount(value: unknown): string | null | "bad" {
   const account = value.trim();
   if (!account || account.length > 128) return "bad";
   return account;
+}
+
+/** Solo el código de error de Pey, nunca el mensaje libre ni la API key. */
+function peyErrorType(json: unknown): string | null {
+  if (!json || typeof json !== "object") return null;
+  const error = (json as { error?: unknown }).error;
+  if (!error || typeof error !== "object") return null;
+  const type = (error as { type?: unknown }).type;
+  if (typeof type !== "string" || !/^[A-Z_]{1,64}$/.test(type)) return null;
+  return type;
 }
 
 async function readJson(response: Response): Promise<unknown> {
