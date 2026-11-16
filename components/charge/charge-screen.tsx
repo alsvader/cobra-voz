@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { announceVerifiedPayment } from "@/adapters/speech/announce";
 import { ChargeView } from "@/components/charge/charge-view";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { chargePath, loginUrl } from "@/lib/routes";
@@ -38,6 +39,7 @@ export function ChargeScreen({ initialCharge, serverTime }: ChargeScreenProps) {
   const chargeId = initialCharge.id;
 
   const [charge, setCharge] = useState(initialCharge);
+  const chargeRef = useRef(initialCharge);
   const [serverNow, setServerNow] = useState(serverTime);
   const [elapsed, setElapsed] = useState({ base: serverTime, ms: 0 });
   const [connection, setConnection] = useState<"ok" | "unavailable">("ok");
@@ -63,22 +65,31 @@ export function ChargeScreen({ initialCharge, serverTime }: ChargeScreenProps) {
     );
   }, [chargeId]);
 
-  const apply = useCallback((next: ChargeDto, at: number) => {
+  const apply = useCallback((next: ChargeDto, at: number, fresh: boolean) => {
+    const previous = chargeRef.current.status;
+    chargeRef.current = next;
     setCharge(next);
     setServerNow(at);
     setConnection("ok");
+    const wasInProgress =
+      previous === "created" || previous === "waiting_payment";
+    // Solo un pago que esta pantalla ve llegar, con la pestaña ya abierta.
+    if (fresh && wasInProgress && next.status === "paid") {
+      void announceVerifiedPayment(next);
+    }
   }, []);
 
   const consult = useCallback(async () => {
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
     const startedAt = epoch.current;
+    const fresh = !document.hidden;
     setRefreshing(true);
     try {
       const result = await requestReconcile(chargeId);
       if (epoch.current !== startedAt) return;
       if (result.kind === "ok") {
-        apply(result.charge, result.serverTime);
+        apply(result.charge, result.serverTime, fresh);
       } else if (result.kind === "unauthenticated") {
         goToLogin();
       } else {
@@ -87,7 +98,7 @@ export function ChargeScreen({ initialCharge, serverTime }: ChargeScreenProps) {
           result.charge &&
           result.serverTime
         ) {
-          apply(result.charge, result.serverTime);
+          apply(result.charge, result.serverTime, fresh);
         }
         setConnection("unavailable");
       }
@@ -97,27 +108,31 @@ export function ChargeScreen({ initialCharge, serverTime }: ChargeScreenProps) {
     }
   }, [chargeId, apply, goToLogin]);
 
-  const refresh = useCallback(async () => {
-    if (refreshInFlight.current) return;
-    refreshInFlight.current = true;
-    const startedAt = epoch.current;
-    setRefreshing(true);
-    try {
-      const result = await fetchCharge(chargeId);
-      if (epoch.current !== startedAt) return;
-      if (result.kind === "ok") {
-        apply(result.charge, result.serverTime);
-      } else if (result.kind === "unauthenticated") {
-        goToLogin();
-      } else {
-        // Sin red, error o 404 inesperado: «verificación no disponible».
-        setConnection("unavailable");
+  const refresh = useCallback(
+    async (source: "poll" | "resume") => {
+      if (refreshInFlight.current) return;
+      refreshInFlight.current = true;
+      const startedAt = epoch.current;
+      const fresh = source === "poll" && !document.hidden;
+      setRefreshing(true);
+      try {
+        const result = await fetchCharge(chargeId);
+        if (epoch.current !== startedAt) return;
+        if (result.kind === "ok") {
+          apply(result.charge, result.serverTime, fresh);
+        } else if (result.kind === "unauthenticated") {
+          goToLogin();
+        } else {
+          // Sin red, error o 404 inesperado: «verificación no disponible».
+          setConnection("unavailable");
+        }
+      } finally {
+        refreshInFlight.current = false;
+        setRefreshing(false);
       }
-    } finally {
-      refreshInFlight.current = false;
-      setRefreshing(false);
-    }
-  }, [chargeId, apply, goToLogin]);
+    },
+    [chargeId, apply, goToLogin],
+  );
 
   const status = charge.status;
   const inProgress = status === "created" || status === "waiting_payment";
@@ -136,13 +151,13 @@ export function ChargeScreen({ initialCharge, serverTime }: ChargeScreenProps) {
     let timer: ReturnType<typeof setTimeout>;
     let stopped = false;
     const tick = async () => {
-      if (!document.hidden) await refresh();
+      if (!document.hidden) await refresh("poll");
       if (!stopped) timer = setTimeout(() => void tick(), delay);
     };
     timer = setTimeout(() => void tick(), delay);
 
     const onResume = () => {
-      if (!document.hidden) void refresh();
+      if (!document.hidden) void refresh("resume");
     };
     document.addEventListener("visibilitychange", onResume);
     window.addEventListener("online", onResume);
@@ -181,18 +196,19 @@ export function ChargeScreen({ initialCharge, serverTime }: ChargeScreenProps) {
   // Al agotarse el tiempo solo se PIDE al servidor que lo confirme.
   const timeIsUp = remainingMs === 0;
   useEffect(() => {
-    if (timeIsUp) void refresh();
+    if (timeIsUp) void refresh("poll");
   }, [timeIsUp, refresh]);
 
   async function closeCharge() {
     setClosing(true);
     setCloseError(null);
     epoch.current += 1;
+    const fresh = !document.hidden;
     const result = await requestCloseCharge(chargeId);
     setClosing(false);
 
     if (result.kind === "ok" || result.kind === "not_closable") {
-      apply(result.charge, result.serverTime);
+      apply(result.charge, result.serverTime, fresh);
       setConfirmingClose(false);
       return;
     }

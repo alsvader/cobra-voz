@@ -1,6 +1,7 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { announceVerifiedPayment } from "@/adapters/speech/announce";
 import { ChargeScreen } from "@/components/charge/charge-screen";
 import { ChargeView, formatRemaining } from "@/components/charge/charge-view";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -10,6 +11,9 @@ const replace = vi.fn();
 // Como el router real de Next: la MISMA instancia en cada render.
 const router = { replace, push: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("@/adapters/speech/announce", () => ({
+  announceVerifiedPayment: vi.fn(),
+}));
 
 const T0 = Date.parse("2026-11-15T12:00:00Z");
 const ID = "3f2b8c1e-0000-4000-8000-000000000001";
@@ -230,6 +234,7 @@ describe("ChargeScreen — sincronización con el backend", () => {
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     replace.mockClear();
+    vi.mocked(announceVerifiedPayment).mockClear();
   });
 
   afterEach(() => {
@@ -279,6 +284,10 @@ describe("ChargeScreen — sincronización con el backend", () => {
     await flush();
     expect(screen.getByText("¡Pago recibido!")).toBeInTheDocument();
     expect(screen.queryByTestId("codi-qr")).not.toBeInTheDocument();
+    expect(announceVerifiedPayment).toHaveBeenCalledTimes(1);
+    expect(announceVerifiedPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ id: ID, status: "paid", amountCents: 15050 }),
+    );
   });
 
   it("consulta periódicamente mientras espera y se detiene al llegar a un estado final", async () => {
@@ -292,9 +301,11 @@ describe("ChargeScreen — sincronización con el backend", () => {
     await advance(5_000);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(screen.getByText("¡Pago recibido!")).toBeInTheDocument();
+    expect(announceVerifiedPayment).toHaveBeenCalledTimes(1);
 
     await advance(60_000);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(announceVerifiedPayment).toHaveBeenCalledTimes(1);
   });
 
   it("no consulta mientras la pestaña está oculta", async () => {
@@ -445,6 +456,7 @@ describe("ChargeScreen — sincronización con el backend", () => {
       await flush();
       expect(screen.getByText("¡Pago recibido!")).toBeInTheDocument();
       expect(screen.queryByText("Cobro cerrado")).not.toBeInTheDocument();
+      expect(announceVerifiedPayment).toHaveBeenCalledTimes(1);
     });
 
     it("si falla la red no se cierra nada y se explica", async () => {
@@ -494,6 +506,40 @@ describe("ChargeScreen — sincronización con el backend", () => {
       expect(screen.getByText("Cobro cerrado")).toBeInTheDocument();
       expect(screen.queryByTestId("codi-qr")).not.toBeInTheDocument();
     });
+  });
+
+  it("no anuncia un cobro que ya estaba pagado al abrir la pantalla", () => {
+    render(<ChargeScreen initialCharge={chargeWith("paid")} serverTime={T0} />);
+    expect(announceVerifiedPayment).not.toHaveBeenCalled();
+  });
+
+  it("no anuncia el pago que aparece al volver a la pestaña", async () => {
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    fetchMock.mockResolvedValue(serverSays(chargeWith("paid")));
+    renderWaiting();
+
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flush();
+
+    expect(screen.getByText("¡Pago recibido!")).toBeInTheDocument();
+    expect(announceVerifiedPayment).not.toHaveBeenCalled();
+    hidden.mockRestore();
+  });
+
+  it("no anuncia si «Consultar nuevamente» se pidió con la pestaña oculta", async () => {
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    fetchMock.mockResolvedValue(serverSays(chargeWith("paid")));
+    renderWaiting();
+
+    await user().click(
+      screen.getByRole("button", { name: "Consultar nuevamente" }),
+    );
+    await flush();
+
+    expect(screen.getByText("¡Pago recibido!")).toBeInTheDocument();
+    expect(announceVerifiedPayment).not.toHaveBeenCalled();
+    hidden.mockRestore();
   });
 });
 

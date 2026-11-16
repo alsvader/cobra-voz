@@ -147,7 +147,7 @@
 - [x] Integrar `gpt-transcribe`, sin conservar audio permanentemente; verificar condiciones del proveedor.
 - [x] Crear parser determinista de importes mexicanos (palabras, cifras, centavos) y rechazar ambigüedad, monto 0, negativos o múltiples cantidades.
 - [x] Mostrar texto e importe en P02; habilitar corregir, volver a hablar o captura manual.
-- [ ] Anunciar **solo** nuevos pagos verificados con SpeechSynthesis en es-MX cuando sea permitido; no anunciar retroactivamente ni duplicar ante polling/reopen. (PR-12)
+- [x] Anunciar **solo** nuevos pagos verificados con SpeechSynthesis en es-MX cuando sea permitido; no anunciar retroactivamente ni duplicar ante polling/reopen. (PR-12)
 - [ ] Probar en un teléfono real el micrófono denegado y un dispositivo sin voz española. Micrófono denegado, red y audio incompatible quedan cubiertos por pruebas de componente y del servicio.
 
 **Gate:** comandos reales de importe común se convierten correctamente o permiten corrección; un pago confirmado reproduce **como máximo un anuncio** durante sesión activa; los fallos de voz nunca generan QR automáticamente.
