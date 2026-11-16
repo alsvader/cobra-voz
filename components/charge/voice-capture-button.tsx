@@ -26,7 +26,7 @@ export type VoiceCaptureButtonProps = Omit<
 /**
  * Control circular de micrófono (DESIGN.md §6.2): 112 px (96 px en pantallas
  * muy angostas), ícono de 40 px y etiqueta debajo. Es solo presentación: la
- * captura real llega en H6. Mientras escucha o procesa no admite otra pulsación.
+ * grabación vive en `VoiceCapture`. Mientras escucha o procesa no admite otra pulsación.
  * La animación es decorativa y nunca implica que la grabación haya funcionado.
  */
 export function VoiceCaptureButton({

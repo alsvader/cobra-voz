@@ -22,8 +22,10 @@ import { ROUTES, chargePath, loginUrl } from "@/lib/routes";
  */
 export function ConfirmAmountScreen({
   initialCents,
+  transcript,
 }: {
   initialCents: number | null;
+  transcript?: string;
 }) {
   const router = useRouter();
   const intention = useRef<{ key: string; cents: number } | null>(null);
@@ -58,6 +60,10 @@ export function ConfirmAmountScreen({
   return (
     <AmountConfirmation
       initialCents={initialCents}
+      transcript={transcript}
+      onRetryVoice={
+        transcript ? () => router.push(ROUTES.app) : undefined
+      }
       onConfirm={handleConfirm}
       onCancel={() => router.push(ROUTES.app)}
     />

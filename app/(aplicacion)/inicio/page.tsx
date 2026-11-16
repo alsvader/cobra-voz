@@ -5,10 +5,9 @@ import { Keyboard, Settings } from "lucide-react";
 import { getDb } from "@/adapters/db/client";
 import { AppShell } from "@/components/ui/app-shell";
 import { buttonVariants } from "@/components/ui/button";
-import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PendingChargeNotice } from "@/components/charge/pending-charge-notice";
-import { VoiceCaptureButton } from "@/components/charge/voice-capture-button";
+import { VoiceCapture } from "@/components/charge/voice-capture";
 import { AppNav } from "@/components/sales/app-nav";
 import { DailySummary } from "@/components/sales/daily-summary";
 import { MovementHistory } from "@/components/sales/movement-history";
@@ -65,12 +64,7 @@ async function HomeContent() {
         aria-label="Cobrar"
         className="flex flex-col items-center gap-6 py-8"
       >
-        <VoiceCaptureButton state="unavailable" />
-
-        <Notice tone="info" label="Voz no disponible" className="w-full">
-          Por ahora la captura por voz no está disponible. Puedes cobrar
-          ingresando el importe manualmente.
-        </Notice>
+        <VoiceCapture enabled={Boolean(process.env.OPENAI_API_KEY?.trim())} />
 
         <Link
           href={ROUTES.confirmAmount}

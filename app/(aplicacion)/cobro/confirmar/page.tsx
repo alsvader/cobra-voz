@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmAmountScreen } from "@/components/charge/confirm-amount-screen";
 import { requireMerchantContext } from "@/modules/identity/guards";
 import { parseCentsParam } from "@/modules/charges/amount";
+import { spokenTranscriptParam, parseSpokenAmount } from "@/modules/voice/parse-amount";
 import { ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = {
@@ -17,9 +18,9 @@ type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 /**
  * P02 — Confirmación del importe. Sin barra inferior (UX §2).
- * `?centavos=15050` precarga un importe ya conocido (p. ej. de voz); sin ese
- * parámetro, o si es inválido, abre la captura manual vacía. El valor se vuelve
- * a validar aquí: nunca se confía en lo que trae la URL.
+ * `?centavos=15050` precarga un importe ya conocido (p. ej. de voz) y `?frase=`
+ * muestra lo que se escuchó. Sin un importe válido, abre la captura manual
+ * vacía. El valor se vuelve a validar aquí: nunca se confía en lo que trae la URL.
  */
 export default function ConfirmarImportePage({
   searchParams,
@@ -57,11 +58,19 @@ async function ConfirmContent({
     : params.centavos;
 
   const initialCents = parseCentsParam(raw);
+  const frase = Array.isArray(params.frase) ? params.frase[0] : params.frase;
+  const phrase = spokenTranscriptParam(frase);
+  const parsed = phrase ? parseSpokenAmount(phrase) : null;
+  const transcript =
+    initialCents !== null && parsed?.ok && parsed.cents === initialCents
+      ? phrase
+      : null;
 
   return (
     <ConfirmAmountScreen
-      key={initialCents ?? "manual"}
+      key={`${initialCents ?? "manual"}:${transcript ?? ""}`}
       initialCents={initialCents}
+      transcript={transcript ?? undefined}
     />
   );
 }

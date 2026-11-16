@@ -12,11 +12,16 @@ test.describe("P01 Inicio → captura manual", () => {
 
     const mic = page.getByRole("button", { name: "Hablar para cobrar" });
     await expect(mic).toBeVisible();
-    // Aún sin STT: el control está inhabilitado y se explica por qué.
-    await expect(mic).toBeDisabled();
-    await expect(
-      page.getByText(/captura por voz no está disponible/i),
-    ).toBeVisible();
+    // Aún sin la clave de voz el control está inhabilitado y se explica por qué.
+    // Con la clave, el mismo botón se pulsa para grabar.
+    const voiceOff = page.getByText(/captura por voz no está disponible/i);
+    if ((await voiceOff.count()) > 0) {
+      await expect(mic).toBeDisabled();
+      await expect(voiceOff).toBeVisible();
+    } else {
+      await expect(mic).toBeEnabled();
+      await expect(page.getByText("Mantén pulsado mientras hablas.")).toBeVisible();
+    }
 
     const box = await mic.boundingBox();
     expect(box?.width).toBe(112);
