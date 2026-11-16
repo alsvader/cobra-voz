@@ -31,6 +31,19 @@ export function MovementHistory({
   const [cursor, setCursor] = useState(nextCursor);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const snapshot = initial
+    .map((movement) =>
+      [movement.id, movement.status, movement.amountCents, movement.occurredAt].join(":"),
+    )
+    .join("|");
+  const [seen, setSeen] = useState(snapshot);
+  // Al volver a la ruta, el servidor manda otra lista. El estado local se
+  // reemplaza aquí, no en un efecto: si no, se queda el arreglo anterior.
+  if (seen !== snapshot) {
+    setSeen(snapshot);
+    setItems(initial);
+    setCursor(nextCursor);
+  }
 
   async function loadMore() {
     if (!cursor || loading) return;

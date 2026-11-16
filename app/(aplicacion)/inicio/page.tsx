@@ -11,6 +11,7 @@ import { VoiceCapture } from "@/components/charge/voice-capture";
 import { AppNav } from "@/components/sales/app-nav";
 import { DailySummary } from "@/components/sales/daily-summary";
 import { MovementHistory } from "@/components/sales/movement-history";
+import { RefreshOnShow } from "@/components/sales/refresh-on-show";
 import { findResumableCharge } from "@/modules/charges/service";
 import { requireMerchantContext } from "@/modules/identity/guards";
 import { getMerchantProfile } from "@/modules/merchant/service";
@@ -45,6 +46,7 @@ async function HomeContent() {
 
   return (
     <>
+      <RefreshOnShow />
       <header className="-mx-4 flex min-h-16 items-center justify-between gap-2 px-4 min-[360px]:-mx-5 min-[360px]:px-5">
         <p className="truncate text-xl font-bold text-foreground">
           {profile?.name}

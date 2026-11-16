@@ -4,6 +4,7 @@ import { getDb } from "@/adapters/db/client";
 import { AppNav } from "@/components/sales/app-nav";
 import { DailySummary } from "@/components/sales/daily-summary";
 import { MovementHistory } from "@/components/sales/movement-history";
+import { RefreshOnShow } from "@/components/sales/refresh-on-show";
 import { AppShell } from "@/components/ui/app-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireMerchantContext } from "@/modules/identity/guards";
@@ -35,6 +36,7 @@ async function SalesContent() {
 
   return (
     <div className="flex flex-col gap-6 py-4">
+      <RefreshOnShow />
       <h1 className="text-xl font-bold text-foreground">Ventas</h1>
       <DailySummary
         variant="full"
