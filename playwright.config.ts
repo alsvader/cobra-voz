@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { webhookSecret } from "./e2e/support/webhook";
 
 // Las pruebas con sesión usan Supabase local: se cargan sus variables (.env.local).
 try {
@@ -38,5 +39,9 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
+    env: {
+      ...process.env,
+      PEY_WEBHOOK_SECRET: webhookSecret(),
+    },
   },
 });

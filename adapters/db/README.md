@@ -83,8 +83,13 @@ Implementadas hasta ahora (`modules/charges`, PR-05 y PR-06):
   solo desde `waiting_payment` y con UPDATE condicional (si llegó un pago en
   paralelo, gana el pago). Cierre local: no cancela nada en el banco.
 - Nunca se reintenta la creación del QR por cuenta propia.
-- `paid` (y la llegada de pagos tardíos a `expired`/`locally_closed`) se
-  implementa en PR-07.
+- `waiting_payment`, `expired`, `locally_closed` o `incident` → `paid`: solo con
+  un pago conciliado (`payments.reconciliation_status = reconciled`) y
+  `paid_payment_id` apuntando a él. Un pago tardío que coincide también entra
+  por aquí.
+- Esos mismos estados, salvo `paid`, → `incident` cuando el aviso firmado no
+  coincide en importe, referencia o cuenta. El pago se guarda, pero no suma.
+- Un QR desconocido no crea cobro: solo el evento y una incidencia `unknown_qr`.
 
 ## Seguridad
 

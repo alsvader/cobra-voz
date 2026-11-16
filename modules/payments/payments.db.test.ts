@@ -1,0 +1,312 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { eq, inArray } from "drizzle-orm";
+import {
+  charges,
+  codiQrs,
+  merchants,
+  paymentEvents,
+  paymentIncidents,
+  payments,
+} from "@/adapters/db/schema";
+import { createTestDb } from "@/adapters/db/testing";
+import { createMockPeyAdapter } from "@/adapters/pey/mock";
+import { closeCharge, createCharge } from "@/modules/charges/service";
+import { recordPeyPayment } from "./service";
+import type { PeyPaymentNotice } from "./schema";
+
+const { db, close } = createTestDb();
+const merchantIds: string[] = [];
+const webhookIds: string[] = [];
+
+async function newMerchant(account = `acct-${randomUUID()}`) {
+  const [merchant] = await db
+    .insert(merchants)
+    .values({
+      name: "Comercio de pruebas de pagos",
+      peyBankAccountId: account,
+    })
+    .returning();
+  merchantIds.push(merchant.id);
+  return merchant;
+}
+
+async function waitingCharge(merchantId: string, account: string) {
+  const created = await createCharge(
+    { db, pey: createMockPeyAdapter() },
+    merchantId,
+    { amountCents: 15050, idempotencyKey: randomUUID() },
+  );
+  if (!created.ok || created.charge.status !== "waiting_payment") {
+    throw new Error("setup");
+  }
+  const [qr] = await db
+    .select()
+    .from(codiQrs)
+    .where(eq(codiQrs.chargeId, created.charge.id));
+  return { charge: created.charge, qr, account };
+}
+
+function notice(
+  qr: { peyQrId: string; numRef: number },
+  account: string,
+  overrides: Partial<PeyPaymentNotice> = {},
+): PeyPaymentNotice {
+  return {
+    transactionId: `tx-${randomUUID()}`,
+    codiQrId: qr.peyQrId,
+    amountCents: 15050,
+    numRef: qr.numRef,
+    bankAccountId: account,
+    paidAt: new Date("2026-11-15T18:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+const webhook = () => {
+  const id = `msg_${randomUUID()}`;
+  webhookIds.push(id);
+  return id;
+};
+
+afterEach(async () => {
+  if (webhookIds.length > 0) {
+    const events = await db
+      .select({ id: paymentEvents.id })
+      .from(paymentEvents)
+      .where(inArray(paymentEvents.webhookId, webhookIds));
+    const eventIds = events.map((row) => row.id);
+    if (eventIds.length > 0) {
+      await db
+        .delete(paymentIncidents)
+        .where(inArray(paymentIncidents.paymentEventId, eventIds));
+      await db.delete(paymentEvents).where(inArray(paymentEvents.id, eventIds));
+    }
+    webhookIds.length = 0;
+  }
+  if (merchantIds.length === 0) return;
+  const rows = await db
+    .select({ id: charges.id })
+    .from(charges)
+    .where(inArray(charges.merchantId, merchantIds));
+  const chargeIds = rows.map((row) => row.id);
+  if (chargeIds.length > 0) {
+    await db
+      .delete(paymentIncidents)
+      .where(inArray(paymentIncidents.chargeId, chargeIds));
+    const qrRows = await db
+      .select({ id: codiQrs.id })
+      .from(codiQrs)
+      .where(inArray(codiQrs.chargeId, chargeIds));
+    const qrIds = qrRows.map((row) => row.id);
+    await db
+      .update(charges)
+      .set({ status: "created", paidPaymentId: null })
+      .where(inArray(charges.id, chargeIds));
+    if (qrIds.length > 0) {
+      await db.delete(payments).where(inArray(payments.codiQrId, qrIds));
+      await db.delete(codiQrs).where(inArray(codiQrs.id, qrIds));
+    }
+    await db.delete(charges).where(inArray(charges.id, chargeIds));
+  }
+  await db.delete(merchants).where(inArray(merchants.id, merchantIds));
+  merchantIds.length = 0;
+});
+afterAll(close);
+
+describe("recordPeyPayment", () => {
+  it("un aviso que coincide deja el cobro pagado y el pago conciliado", async () => {
+    const merchant = await newMerchant();
+    const { charge, qr, account } = await waitingCharge(
+      merchant.id,
+      merchant.peyBankAccountId,
+    );
+
+    const result = await recordPeyPayment(
+      { db },
+      webhook(),
+      notice(qr, account),
+    );
+
+    expect(result).toEqual({ outcome: "paid", duplicate: false });
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, charge.id));
+    expect(row.status).toBe("paid");
+    expect(row.paidPaymentId).not.toBeNull();
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.codiQrId, qr.id));
+    expect(payment).toMatchObject({
+      amountCents: 15050,
+      reconciliationStatus: "reconciled",
+      evidenceSource: "webhook",
+    });
+  });
+
+  it("repetir el mismo webhook-id no crea otro pago", async () => {
+    const merchant = await newMerchant();
+    const { qr, account } = await waitingCharge(
+      merchant.id,
+      merchant.peyBankAccountId,
+    );
+    const id = webhook();
+    const payload = notice(qr, account);
+
+    await recordPeyPayment({ db }, id, payload);
+    const again = await recordPeyPayment({ db }, id, payload);
+
+    expect(again.duplicate).toBe(true);
+    const rows = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.codiQrId, qr.id));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("otra entrega de la misma transacción tampoco duplica el pago", async () => {
+    const merchant = await newMerchant();
+    const { qr, account } = await waitingCharge(
+      merchant.id,
+      merchant.peyBankAccountId,
+    );
+    const payload = notice(qr, account);
+
+    await recordPeyPayment({ db }, webhook(), payload);
+    const again = await recordPeyPayment({ db }, webhook(), payload);
+
+    expect(again).toEqual({ outcome: "paid", duplicate: true });
+    const rows = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.codiQrId, qr.id));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("entregas simultáneas del mismo webhook crean un solo pago", async () => {
+    const merchant = await newMerchant();
+    const { qr, account } = await waitingCharge(
+      merchant.id,
+      merchant.peyBankAccountId,
+    );
+    const id = webhook();
+    const payload = notice(qr, account);
+
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => recordPeyPayment({ db }, id, payload)),
+    );
+
+    expect(results.filter((result) => !result.duplicate)).toHaveLength(1);
+    const rows = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.codiQrId, qr.id));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("un importe distinto no marca pagado: guarda incidencia y el pago no concilia", async () => {
+    const merchant = await newMerchant();
+    const { charge, qr, account } = await waitingCharge(
+      merchant.id,
+      merchant.peyBankAccountId,
+    );
+
+    const result = await recordPeyPayment(
+      { db },
+      webhook(),
+      notice(qr, account, { amountCents: 100 }),
+    );
+
+    expect(result).toEqual({ outcome: "incident", duplicate: false });
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, charge.id));
+    expect(row.status).toBe("incident");
+    expect(row.paidPaymentId).toBeNull();
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.codiQrId, qr.id));
+    expect(payment.reconciliationStatus).toBe("incident");
+    const incidents = await db
+      .select()
+      .from(paymentIncidents)
+      .where(eq(paymentIncidents.chargeId, charge.id));
+    expect(incidents.map((item) => item.type)).toEqual(["amount_mismatch"]);
+  });
+
+  it("una cuenta o referencia distinta tampoco acredita el cobro", async () => {
+    const merchant = await newMerchant();
+    const { charge, qr, account } = await waitingCharge(
+      merchant.id,
+      merchant.peyBankAccountId,
+    );
+
+    await recordPeyPayment(
+      { db },
+      webhook(),
+      notice(qr, account, { bankAccountId: "otra-cuenta" }),
+    );
+
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, charge.id));
+    expect(row.status).toBe("incident");
+    const incidents = await db
+      .select()
+      .from(paymentIncidents)
+      .where(eq(paymentIncidents.chargeId, charge.id));
+    expect(incidents[0].type).toBe("account_mismatch");
+  });
+
+  it("un QR desconocido no crea cobro ni pago", async () => {
+    const transactionId = `tx-${randomUUID()}`;
+    const result = await recordPeyPayment({ db }, webhook(), {
+      transactionId,
+      codiQrId: `qr-desconocido-${randomUUID()}`,
+      amountCents: 15050,
+      numRef: 1,
+      bankAccountId: "acct",
+      paidAt: new Date(),
+    });
+
+    expect(result.outcome).toBe("incident");
+    const paymentRows = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(eq(payments.providerTransactionId, transactionId));
+    expect(paymentRows).toHaveLength(0);
+  });
+
+  it("un cobro vencido o cerrado en local sí queda pagado si el aviso coincide", async () => {
+    const merchant = await newMerchant();
+    const expired = await waitingCharge(merchant.id, merchant.peyBankAccountId);
+    await db
+      .update(charges)
+      .set({ status: "expired" })
+      .where(eq(charges.id, expired.charge.id));
+    const closed = await waitingCharge(merchant.id, merchant.peyBankAccountId);
+    await closeCharge({ db }, merchant.id, closed.charge.id);
+
+    await recordPeyPayment(
+      { db },
+      webhook(),
+      notice(expired.qr, expired.account),
+    );
+    await recordPeyPayment(
+      { db },
+      webhook(),
+      notice(closed.qr, closed.account),
+    );
+
+    const rows = await db
+      .select({ id: charges.id, status: charges.status })
+      .from(charges)
+      .where(inArray(charges.id, [expired.charge.id, closed.charge.id]));
+    expect(rows.every((row) => row.status === "paid")).toBe(true);
+  });
+});

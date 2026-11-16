@@ -58,6 +58,17 @@ cerrado localmente, QR incierto e incidencia. Reglas:
   cobro ya cambió (pagado, vencido) responde 409 con el estado real.
 - Un QR del simulador se rotula siempre «QR de prueba».
 
+### Pagos por webhook (PR-07)
+
+`POST /api/webhooks/pey` es público: no usa sesión ni Origin. Exige firma
+Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`) con
+`PEY_WEBHOOK_SECRET`. Una firma inválida responde 401 y no se guarda. Si la firma
+vale y el aviso coincide en QR, importe, referencia numérica y cuenta, el cobro
+pasa a `paid` en la misma transacción, también si ya estaba vencido o cerrado en
+local. Un importe, cuenta o referencia distintos deja el pago como incidencia y
+no lo cuenta como venta. El mismo `webhook-id` o el mismo `transactionId` no
+crean otro pago. La consulta a Pey para recuperar un aviso perdido es PR-08.
+
 ### Autenticación y autorización
 
 - **Supabase Auth SSR** (cookies). `proxy.ts` renueva la sesión y redirige a `/acceso`

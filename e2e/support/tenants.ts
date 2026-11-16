@@ -12,6 +12,7 @@ import {
   merchantPreferences,
   merchants,
   merchantUsers,
+  paymentEvents,
   paymentIncidents,
   payments,
 } from "../../adapters/db/schema";
@@ -29,6 +30,7 @@ export type Tenant = {
   /** Vacío si el usuario se creó sin comercio. */
   merchantId: string | null;
   merchantName: string | null;
+  peyBankAccountId: string | null;
 };
 
 function connect() {
@@ -56,17 +58,19 @@ export async function createTenant(
       userId: user.id,
       merchantId: null,
       merchantName: null,
+      peyBankAccountId: null,
     };
   }
 
   const merchantName = `${label} ${suffix}`;
+  const peyBankAccountId = `e2e-acct-${suffix}`;
   const { db, close } = connect();
   try {
     const [merchant] = await db
       .insert(merchants)
       .values({
         name: merchantName,
-        peyBankAccountId: `e2e-acct-${suffix}`,
+        peyBankAccountId,
         receivingAccountLabel: `Cuenta ${suffix}`,
       })
       .returning({ id: merchants.id });
@@ -81,6 +85,7 @@ export async function createTenant(
       userId: user.id,
       merchantId: merchant.id,
       merchantName,
+      peyBankAccountId,
     };
   } finally {
     await close();
@@ -100,23 +105,60 @@ export async function deleteTenant(tenant: Tenant): Promise<void> {
       .where(eq(charges.merchantId, tenant.merchantId));
     const chargeIds = rows.map((row) => row.id);
     if (chargeIds.length > 0) {
-      await db
-        .delete(paymentIncidents)
-        .where(inArray(paymentIncidents.chargeId, chargeIds));
       const qrRows = await db
         .select({ id: codiQrs.id })
         .from(codiQrs)
         .where(inArray(codiQrs.chargeId, chargeIds));
+      const qrIds = qrRows.map((row) => row.id);
+      const eventRows = qrIds.length
+        ? await db
+            .select({ id: paymentEvents.id })
+            .from(paymentEvents)
+            .where(inArray(paymentEvents.codiQrId, qrIds))
+        : [];
+      const paymentRows = qrIds.length
+        ? await db
+            .select({ id: payments.id })
+            .from(payments)
+            .where(inArray(payments.codiQrId, qrIds))
+        : [];
+      await db
+        .delete(paymentIncidents)
+        .where(inArray(paymentIncidents.chargeId, chargeIds));
+      if (eventRows.length > 0) {
+        await db.delete(paymentIncidents).where(
+          inArray(
+            paymentIncidents.paymentEventId,
+            eventRows.map((row) => row.id),
+          ),
+        );
+      }
+      if (paymentRows.length > 0) {
+        await db.delete(paymentIncidents).where(
+          inArray(
+            paymentIncidents.paymentId,
+            paymentRows.map((row) => row.id),
+          ),
+        );
+      }
       // charges → payments → codi_qrs → charges: se rompe el ciclo primero.
       await db
         .update(charges)
         .set({ status: "created", paidPaymentId: null })
         .where(inArray(charges.id, chargeIds));
-      if (qrRows.length > 0) {
+      if (eventRows.length > 0) {
+        await db.delete(paymentEvents).where(
+          inArray(
+            paymentEvents.id,
+            eventRows.map((row) => row.id),
+          ),
+        );
+      }
+      if (paymentRows.length > 0) {
         await db.delete(payments).where(
           inArray(
-            payments.codiQrId,
-            qrRows.map((row) => row.id),
+            payments.id,
+            paymentRows.map((row) => row.id),
           ),
         );
       }
