@@ -26,6 +26,7 @@ Para quien atiende solo un puesto de comida, una fonda o un tianguis: muchos cob
 - **Confirmar antes del código.** La cifra se revisa y se corrige. El QR no se pide hasta pulsar «Confirmar importe».
 - **Mostrar el cobro.** Importe, referencia, código y tiempo restante. En local el QR se rotula como prueba.
 - **Esperar al banco.** «Consultar nuevamente» lee el estado guardado. «Cerrar cobro» solo cierra la pantalla: no cancela el pago en el banco.
+- **Decir el pago recibido.** Si la pantalla de cobro está abierta y «Anunciar pagos» está activo, CobraVoz dice una vez «¡Pago recibido!» y el importe. El aviso en pantalla aparece igual.
 - **Ver el día.** El total y el historial suman únicamente pagos conciliados.
 
 ## Cómo funciona
@@ -35,7 +36,7 @@ Para quien atiende solo un puesto de comida, una fonda o un tianguis: muchos cob
 3. Pulsas «Confirmar importe». Esa acción crea la intención de cobro.
 4. Si Pey responde, la pantalla de cobro muestra el QR. El importe de esa solicitud ya no cambia.
 5. El cliente paga con su app bancaria.
-6. Un aviso firmado, o una conciliación que coincide en código, importe, referencia y cuenta, marca el cobro como pagado. Un aviso que no coincide queda como incidencia y no entra en las ventas.
+6. Un aviso firmado, o una conciliación que coincide en código, importe, referencia y cuenta, marca el cobro como pagado y la pantalla muestra «¡Pago recibido!». Con la pestaña abierta y «Anunciar pagos» activo, también lo dice una sola vez. Un aviso que no coincide queda como incidencia y no entra en las ventas.
 7. Al volver a Inicio o a Ventas, el pago conciliado aparece en el total del día.
 
 <p align="center">
@@ -48,7 +49,7 @@ El recorrido de arriba usa la captura manual de $150.00 en el simulador local.
 
 - En local y en preview responde el simulador, aunque exista una clave de Pey. El QR dice «QR de prueba · no sirve para pagar». El importe **$13.01** deja la creación en estado incierto.
 - En producción, con `PEY_API_KEY`, el QR bancario es siempre de **$0.01**. El importe confirmado en la app se guarda y se muestra como la venta de ejemplo. El banco mueve un centavo, y ese centavo concilia el cobro.
-- La preferencia «Anunciar pagos» se guarda en Configuración. El aviso que hoy confirma un pago es el de la pantalla.
+- Con «Anunciar pagos» activo, un pago que la pantalla de cobro ve llegar se dice una sola vez: «¡Pago recibido!» y el importe en palabras. Hace falta la pestaña abierta. El aviso en pantalla aparece igual si el audio no sale.
 
 ## Recorrido
 
@@ -141,6 +142,7 @@ cerrado localmente, QR incierto e incidencia. Reglas:
   `waiting_payment`, idempotente, con aviso de que no cancela el pago bancario. Si el
   cobro ya cambió (pagado, vencido) responde 409 con el estado real.
 - Un QR del simulador se rotula siempre «QR de prueba».
+- Al pasar de `waiting_payment` a `paid` con la pestaña visible, y con «Anunciar pagos» activo, la pantalla dice el importe una sola vez (`adapters/speech`). Si el audio no sale, la confirmación sigue en pantalla. Reabrir el cobro no repite el anuncio.
 
 ### Pagos por webhook (PR-07)
 
