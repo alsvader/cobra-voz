@@ -7,7 +7,9 @@ import { AppShell } from "@/components/ui/app-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PendingChargeNotice } from "@/components/charge/pending-charge-notice";
 import { VoiceCaptureButton } from "@/components/charge/voice-capture-button";
+import { findResumableCharge } from "@/modules/charges/service";
 import { requireMerchantContext } from "@/modules/identity/guards";
 import { getMerchantProfile } from "@/modules/merchant/service";
 import { ROUTES } from "@/lib/routes";
@@ -30,7 +32,11 @@ export default function InicioPage() {
 
 async function HomeContent() {
   const { merchantId } = await requireMerchantContext();
-  const profile = await getMerchantProfile(getDb(), merchantId);
+  const db = getDb();
+  const [profile, pending] = await Promise.all([
+    getMerchantProfile(db, merchantId),
+    findResumableCharge({ db }, merchantId),
+  ]);
 
   return (
     <>
@@ -67,6 +73,8 @@ async function HomeContent() {
           <Keyboard aria-hidden="true" />
           Ingresar importe manualmente
         </Link>
+
+        {pending ? <PendingChargeNotice charge={pending} /> : null}
       </section>
     </>
   );

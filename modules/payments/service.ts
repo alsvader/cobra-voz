@@ -36,6 +36,11 @@ export type RecordPaymentResult = {
 
 type Deps = { db: Database; now?: () => Date };
 
+type RecordOptions = {
+  /** De dónde salió la evidencia. Por defecto, el webhook firmado. */
+  evidenceSource?: "webhook" | "provider_query";
+};
+
 /**
  * Registra un aviso de pago YA firmado (Architecture §8).
  *
@@ -55,8 +60,14 @@ export async function recordPeyPayment(
   deps: Deps,
   webhookId: string,
   notice: PeyPaymentNotice,
+  options: RecordOptions = {},
 ): Promise<RecordPaymentResult> {
   const now = (deps.now ?? (() => new Date()))();
+  const evidenceSource = options.evidenceSource ?? "webhook";
+  const eventType =
+    evidenceSource === "provider_query"
+      ? "codi.qr.payment_query"
+      : "codi.qr.payment_received";
 
   return deps.db.transaction(async (tx) => {
     const [inserted] = await tx
@@ -64,7 +75,7 @@ export async function recordPeyPayment(
       .values({
         provider: PROVIDER,
         webhookId,
-        eventType: "codi.qr.payment_received",
+        eventType,
         validationStatus: "verified",
         processingStatus: "pending",
         providerTransactionId: notice.transactionId,
@@ -126,7 +137,7 @@ export async function recordPeyPayment(
         providerTransactionId: notice.transactionId,
         amountCents: notice.amountCents,
         reconciliationStatus: reconciled ? "reconciled" : "incident",
-        evidenceSource: "webhook",
+        evidenceSource,
         paidAt: notice.paidAt,
         recordedAt: now,
         reconciledAt: reconciled ? now : null,

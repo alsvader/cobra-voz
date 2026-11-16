@@ -1,4 +1,4 @@
-import { and, eq, gt, lte } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lte } from "drizzle-orm";
 import type { Database } from "@/adapters/db/create-db";
 import {
   charges,
@@ -330,15 +330,77 @@ export async function createCharge(
 }
 
 /** Cobro del comercio indicado, o `null` (también si es de otro comercio). */
+export type SettledCharge = {
+  charge: ChargeDto;
+  /** Id externo de Pey. `null` si ese QR nunca se confirmó: no se consulta. */
+  peyQrId: string | null;
+};
+
+/**
+ * Lee el cobro del comercio y aplica el vencimiento por tiempo. Incluye el
+ * id de Pey, que el DTO público no expone, para poder conciliar.
+ */
+export async function loadSettledCharge(
+  deps: Pick<ChargesDeps, "db" | "now">,
+  merchantId: string,
+  chargeId: string,
+): Promise<SettledCharge | null> {
+  const found = await loadCharge(deps.db, merchantId, eq(charges.id, chargeId));
+  if (!found) return null;
+  const settled = await settleCharge(deps, merchantId, found);
+  return {
+    charge: toDto(settled.charge, settled.qr),
+    peyQrId: settled.qr?.peyQrId ?? null,
+  };
+}
+
 export async function getCharge(
   deps: Pick<ChargesDeps, "db" | "now">,
   merchantId: string,
   chargeId: string,
 ): Promise<ChargeDto | null> {
-  const found = await loadCharge(deps.db, merchantId, eq(charges.id, chargeId));
-  if (!found) return null;
-  const settled = await settleCharge(deps, merchantId, found);
-  return toDto(settled.charge, settled.qr);
+  const settled = await loadSettledCharge(deps, merchantId, chargeId);
+  return settled?.charge ?? null;
+}
+
+const RESUMABLE_STATUSES = [
+  "created",
+  "waiting_payment",
+  "qr_uncertain",
+] as const;
+
+/**
+ * Cobro que Inicio puede ofrecer al reabrir la app (UF-07). El más reciente
+ * que sigue en curso o sin QR confirmado. Un cobro ya pagado no se anuncia.
+ */
+export async function findResumableCharge(
+  deps: Pick<ChargesDeps, "db" | "now">,
+  merchantId: string,
+): Promise<ChargeDto | null> {
+  const rows = await deps.db
+    .select({ charge: charges, qr: codiQrs })
+    .from(charges)
+    .leftJoin(codiQrs, eq(codiQrs.chargeId, charges.id))
+    .where(
+      and(
+        eq(charges.merchantId, merchantId),
+        inArray(charges.status, [...RESUMABLE_STATUSES]),
+      ),
+    )
+    .orderBy(desc(charges.createdAt))
+    .limit(5);
+
+  for (const row of rows) {
+    const settled = await settleCharge(deps, merchantId, row);
+    if (
+      settled.charge.status === "created" ||
+      settled.charge.status === "waiting_payment" ||
+      settled.charge.status === "qr_uncertain"
+    ) {
+      return toDto(settled.charge, settled.qr);
+    }
+  }
+  return null;
 }
 
 export type CloseChargeResult =

@@ -119,6 +119,61 @@ export async function fetchCharge(
   };
 }
 
+export type ReconcileChargeClientResult =
+  | { kind: "ok"; charge: ChargeDto; serverTime: number }
+  | { kind: "unauthenticated" }
+  | { kind: "not_found" }
+  /**
+   * Pey no respondió, o no hubo red. Si `charge` viene, es el estado
+   * persistido (p. ej. ya venció) y tampoco es un pago confirmado.
+   */
+  | { kind: "unavailable"; charge?: ChargeDto; serverTime?: number };
+
+/**
+ * «Consultar nuevamente»: pide al servidor que pregunte a Pey. El resultado
+ * que se muestra es el cobro persistido; un fallo de consulta no marca pagado.
+ */
+export async function requestReconcile(
+  chargeId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ReconcileChargeClientResult> {
+  let response: Response;
+  try {
+    response = await fetchImpl(`/api/charges/${chargeId}/reconcile`, {
+      method: "POST",
+    });
+  } catch {
+    return { kind: "unavailable" };
+  }
+
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (response.status === 404) return { kind: "not_found" };
+
+  const body = (await response.json().catch(() => null)) as {
+    charge?: ChargeDto;
+    serverTime?: string;
+  } | null;
+  const serverTime =
+    body?.serverTime !== undefined
+      ? parseServerTime(body.serverTime)
+      : undefined;
+
+  if (response.ok && body?.charge && serverTime !== undefined) {
+    return { kind: "ok", charge: body.charge, serverTime };
+  }
+  if (response.status === 409 && body?.charge && serverTime !== undefined) {
+    return { kind: "ok", charge: body.charge, serverTime };
+  }
+  if (response.status === 503 && body?.charge && serverTime !== undefined) {
+    return {
+      kind: "unavailable",
+      charge: body.charge,
+      serverTime,
+    };
+  }
+  return { kind: "unavailable" };
+}
+
 export type CloseChargeClientResult =
   | { kind: "ok"; charge: ChargeDto; serverTime: number }
   /** Ya no era cerrable (p. ej. se pagó o venció): `charge` es el estado real. */

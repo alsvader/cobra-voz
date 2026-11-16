@@ -47,6 +47,12 @@ export const charges = pgTable(
     ),
     expiresAt: timestamptz("expires_at"),
     closedAt: timestamptz("closed_at"),
+    /**
+     * Último intento de consultar a Pey por este cobro (Architecture §9).
+     * Se anota aunque la consulta no encuentre un pago, para no repetirla
+     * en cada pasada del cron.
+     */
+    lastReconciliationAt: timestamptz("last_reconciliation_at"),
     ...timestamps,
   },
   (table) => [
@@ -57,6 +63,7 @@ export const charges = pgTable(
     index("charges_merchant_created_idx").on(table.merchantId, table.createdAt),
     index("charges_merchant_status_idx").on(table.merchantId, table.status),
     index("charges_expires_at_idx").on(table.expiresAt),
+    index("charges_last_reconciliation_at_idx").on(table.lastReconciliationAt),
     check("charges_amount_cents_positive", sql`${table.amountCents} > 0`),
     check("charges_currency_mxn", sql`${table.currency} = 'MXN'`),
     check(

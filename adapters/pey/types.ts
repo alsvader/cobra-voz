@@ -36,9 +36,34 @@ export type CreateQrOutcome =
    */
   | { status: "uncertain"; reason: string };
 
+/**
+ * Pago que Pey reporta al consultar un QR que CobraVoz YA conoce.
+ * El adaptador solo devuelve pagos de ESE `peyQrId`: el servicio no acepta
+ * un identificador distinto ni inventa uno que Pey nunca entregó.
+ * `amountCents` ya es entero; la implementación real (H5) convierte el texto
+ * de Pey antes de cruzar esta frontera, sin pasar por punto flotante.
+ */
+export type QueriedPayment = {
+  transactionId: string;
+  amountCents: number;
+  numRef: number;
+  bankAccountId: string;
+  paidAt: Date;
+};
+
+export type QueryQrPaymentsOutcome =
+  | { status: "ok"; payments: QueriedPayment[] }
+  /** Timeout o error del proveedor. No es «no hubo pago» y no acredita nada. */
+  | { status: "unavailable"; reason: string };
+
 export interface PeyAdapter {
   /** Identifica la implementación (logs y rotulado de QR de prueba). */
   readonly kind: "mock" | "real";
   /** Una única llamada a `POST /codi/qr`. Sin reintentos internos. */
   createCodiQr(request: CreateQrRequest): Promise<CreateQrOutcome>;
+  /**
+   * `GET /transaction/codi/qr/:id` (Architecture §9). Solo con un id que Pey
+   * ya devolvió. Sin id no hay nada que consultar.
+   */
+  queryCodiQrPayments(peyQrId: string): Promise<QueryQrPaymentsOutcome>;
 }

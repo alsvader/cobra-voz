@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { ChargeView } from "@/components/charge/charge-view";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { chargePath, loginUrl } from "@/lib/routes";
-import { fetchCharge, requestCloseCharge } from "@/modules/charges/client";
+import {
+  fetchCharge,
+  requestCloseCharge,
+  requestReconcile,
+} from "@/modules/charges/client";
 import type { ChargeDto } from "@/modules/charges/types";
 
 /** Consulta periódica controlada (sin WebSockets en el MVP). */
@@ -64,6 +68,34 @@ export function ChargeScreen({ initialCharge, serverTime }: ChargeScreenProps) {
     setServerNow(at);
     setConnection("ok");
   }, []);
+
+  const consult = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    const startedAt = epoch.current;
+    setRefreshing(true);
+    try {
+      const result = await requestReconcile(chargeId);
+      if (epoch.current !== startedAt) return;
+      if (result.kind === "ok") {
+        apply(result.charge, result.serverTime);
+      } else if (result.kind === "unauthenticated") {
+        goToLogin();
+      } else {
+        if (
+          result.kind === "unavailable" &&
+          result.charge &&
+          result.serverTime
+        ) {
+          apply(result.charge, result.serverTime);
+        }
+        setConnection("unavailable");
+      }
+    } finally {
+      refreshInFlight.current = false;
+      setRefreshing(false);
+    }
+  }, [chargeId, apply, goToLogin]);
 
   const refresh = useCallback(async () => {
     if (refreshInFlight.current) return;
@@ -184,7 +216,7 @@ export function ChargeScreen({ initialCharge, serverTime }: ChargeScreenProps) {
         connection={connection}
         refreshing={refreshing}
         closeError={closeError}
-        onRefresh={() => void refresh()}
+        onRefresh={() => void consult()}
         onRequestClose={() => {
           setCloseError(null);
           setConfirmingClose(true);

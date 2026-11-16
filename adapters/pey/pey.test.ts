@@ -6,6 +6,8 @@ import {
 } from "./index";
 import {
   MOCK_QR_PREFIX,
+  MOCK_QUERY_PAID_AMOUNT_CENTS,
+  MOCK_QUERY_UNAVAILABLE_AMOUNT_CENTS,
   MOCK_UNCERTAIN_AMOUNT_CENTS,
   createMockPeyAdapter,
   isSimulatedQr,
@@ -52,6 +54,63 @@ describe("adaptador Pey simulado", () => {
     await mock.createCodiQr(request);
     expect(mock.calls).toHaveLength(1);
     expect(mock.calls[0].amountCents).toBe(15050);
+  });
+
+  it("consulta un QR conocido sin inventar un pago", async () => {
+    const mock = createMockPeyAdapter();
+    const created = await mock.createCodiQr(request);
+    if (created.status !== "created") throw new Error("setup");
+
+    const outcome = await mock.queryCodiQrPayments(created.peyQrId);
+
+    expect(outcome).toEqual({ status: "ok", payments: [] });
+    expect(mock.queryCalls).toEqual([created.peyQrId]);
+  });
+
+  it("el importe mágico de consulta devuelve un pago que coincide, y solo una vez por id", async () => {
+    const paidAt = new Date("2026-11-15T18:00:00Z");
+    const mock = createMockPeyAdapter({ now: () => paidAt });
+    const created = await mock.createCodiQr({
+      ...request,
+      amountCents: MOCK_QUERY_PAID_AMOUNT_CENTS,
+    });
+    if (created.status !== "created") throw new Error("setup");
+
+    const outcome = await mock.queryCodiQrPayments(created.peyQrId);
+
+    expect(outcome).toEqual({
+      status: "ok",
+      payments: [
+        {
+          transactionId: `mock-tx-${created.peyQrId}`,
+          amountCents: MOCK_QUERY_PAID_AMOUNT_CENTS,
+          numRef: request.numRef,
+          bankAccountId: request.bankAccountId,
+          paidAt,
+        },
+      ],
+    });
+  });
+
+  it("otro importe mágico deja la consulta sin respuesta", async () => {
+    const mock = createMockPeyAdapter();
+    const created = await mock.createCodiQr({
+      ...request,
+      amountCents: MOCK_QUERY_UNAVAILABLE_AMOUNT_CENTS,
+    });
+    if (created.status !== "created") throw new Error("setup");
+
+    const outcome = await mock.queryCodiQrPayments(created.peyQrId);
+
+    expect(outcome.status).toBe("unavailable");
+  });
+
+  it("un id que este proceso no emitió no se trata como «sin pago»", async () => {
+    const mock = createMockPeyAdapter();
+
+    const outcome = await mock.queryCodiQrPayments("qr-desconocido");
+
+    expect(outcome.status).toBe("unavailable");
   });
 
   it("un QR cualquiera no se considera de prueba", () => {

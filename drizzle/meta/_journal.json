@@ -15,6 +15,13 @@
       "when": 1794768600176,
       "tag": "0001_revoke_public_api_access",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794788591186,
+      "tag": "0002_last_reconciliation_at",
+      "breakpoints": true
     }
   ]
 }

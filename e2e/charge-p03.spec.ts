@@ -125,9 +125,41 @@ test.describe("P03 — QR y estado «Esperando pago»", () => {
     expect((await readCharges(tenant.merchantId!)).charges).toHaveLength(1);
     expect(page.url()).toContain(charge.id);
   });
+
+  test("Inicio ofrece retomar el cobro que sigue en curso", async ({
+    page,
+    tenant,
+  }) => {
+    const charge = await openChargeScreen(page, tenant);
+
+    await page.goto("/inicio");
+
+    await expect(page.getByText("Cobro pendiente")).toBeVisible();
+    await expect(page.getByText(/no empezar otro/)).toBeVisible();
+    await page.getByRole("link", { name: "Retomar cobro" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/cobro/${charge.id}$`));
+    await expect(page.getByText("Esperando pago")).toBeVisible();
+  });
 });
 
 test.describe("P03 — el estado sale del backend, nunca de la pantalla", () => {
+  test("«Consultar nuevamente» recupera un pago que no llegó por aviso", async ({
+    page,
+    tenant,
+  }) => {
+    const charge = await openChargeScreen(page, tenant, "13.02");
+
+    await page.getByRole("button", { name: "Consultar nuevamente" }).click();
+
+    await expect(page.getByText("¡Pago recibido!")).toBeVisible();
+    const stored = (await readCharges(tenant.merchantId!)).charges.find(
+      (row) => row.id === charge.id,
+    );
+    expect(stored?.status).toBe("paid");
+    expect(stored?.paidPaymentId).not.toBeNull();
+  });
+
   test("«Consultar nuevamente» refleja un pago ya persistido", async ({
     page,
     tenant,
@@ -181,7 +213,7 @@ test.describe("P03 — el estado sale del backend, nunca de la pantalla", () => 
     tenant,
   }) => {
     await openChargeScreen(page, tenant);
-    await page.route("**/api/charges/*", (route) => route.abort());
+    await page.route("**/api/charges/**", (route) => route.abort());
 
     await page.getByRole("button", { name: "Consultar nuevamente" }).click();
 
@@ -190,7 +222,7 @@ test.describe("P03 — el estado sale del backend, nunca de la pantalla", () => 
     await expect(page.getByText("Esperando pago")).toBeVisible();
     await expect(page.getByText(/expirado|rechazado/i)).toHaveCount(0);
 
-    await page.unroute("**/api/charges/*");
+    await page.unroute("**/api/charges/**");
     await page.getByRole("button", { name: "Consultar nuevamente" }).click();
     await expect(page.getByText("Verificación no disponible")).toHaveCount(0);
   });

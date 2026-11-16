@@ -1,7 +1,13 @@
 import { createMockPeyAdapter } from "./mock";
 import type { PeyAdapter } from "./types";
 
-export type { CreateQrOutcome, CreateQrRequest, PeyAdapter } from "./types";
+export type {
+  CreateQrOutcome,
+  CreateQrRequest,
+  PeyAdapter,
+  QueriedPayment,
+  QueryQrPaymentsOutcome,
+} from "./types";
 export { isSimulatedQr } from "./mock";
 
 /** No hay un proveedor de QR utilizable en este entorno. */

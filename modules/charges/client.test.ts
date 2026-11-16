@@ -3,6 +3,7 @@ import {
   fetchCharge,
   newIdempotencyKey,
   requestCloseCharge,
+  requestReconcile,
   submitCharge,
 } from "./client";
 import { idempotencyKeySchema } from "./schemas";
@@ -141,6 +142,52 @@ describe("fetchCharge", () => {
       kind: "unavailable",
     });
     expect(await fetchCharge(charge.id, respond(200, {}) as never)).toEqual({
+      kind: "unavailable",
+    });
+  });
+});
+
+describe("requestReconcile", () => {
+  it("consulta por POST y devuelve el cobro persistido", async () => {
+    const paid = { ...charge, status: "paid" as const };
+    const fetchMock = respond(200, {
+      charge: paid,
+      serverTime: SERVER_TIME,
+      outcome: "paid",
+    });
+
+    const result = await requestReconcile(charge.id, fetchMock as never);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/charges/${charge.id}/reconcile`,
+      { method: "POST" },
+    );
+    expect(result).toMatchObject({ kind: "ok", charge: paid });
+  });
+
+  it("503 con cobro es verificación no disponible, sin tomarlo por pagado", async () => {
+    const result = await requestReconcile(
+      charge.id,
+      respond(503, {
+        error: { code: "provider_unavailable" },
+        charge,
+        serverTime: SERVER_TIME,
+      }) as never,
+    );
+    expect(result).toMatchObject({
+      kind: "unavailable",
+      charge,
+    });
+  });
+
+  it("401 y un fallo de red no confirman el pago", async () => {
+    expect(await requestReconcile(charge.id, respond(401) as never)).toEqual({
+      kind: "unauthenticated",
+    });
+    const failing = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    expect(await requestReconcile(charge.id, failing as never)).toEqual({
       kind: "unavailable",
     });
   });

@@ -1,0 +1,2 @@
+ALTER TABLE "charges" ADD COLUMN "last_reconciliation_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "charges_last_reconciliation_at_idx" ON "charges" USING btree ("last_reconciliation_at");

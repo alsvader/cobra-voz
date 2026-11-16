@@ -269,8 +269,8 @@ describe("ChargeScreen — sincronización con el backend", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/charges/${ID}`,
-      expect.objectContaining({ cache: "no-store" }),
+      `/api/charges/${ID}/reconcile`,
+      expect.objectContaining({ method: "POST" }),
     );
     await flush();
     expect(screen.getByText("¡Pago recibido!")).toBeInTheDocument();

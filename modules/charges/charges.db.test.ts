@@ -19,6 +19,7 @@ import {
   STALE_CREATED_MS,
   closeCharge,
   createCharge,
+  findResumableCharge,
   getCharge,
 } from "./service";
 
@@ -49,6 +50,12 @@ function adapterReturning(
     async createCodiQr(request) {
       calls.push(request);
       return produce();
+    },
+    async queryCodiQrPayments() {
+      return {
+        status: "unavailable",
+        reason: "Esta prueba no consulta pagos.",
+      };
     },
   };
   return { adapter, calls };
@@ -879,5 +886,76 @@ describe("closeCharge — cierre LOCAL", () => {
     expect(b.ok).toBe(false);
     expect((await rowOf(creating.id)).status).toBe("created");
     expect((await rowOf(uncertain.id)).status).toBe("qr_uncertain");
+  });
+});
+
+describe("findResumableCharge", () => {
+  it("devuelve el cobro en curso más reciente y omite el que ya venció", async () => {
+    const merchant = await newMerchant();
+    const older = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      { amountCents: 1000, idempotencyKey: newKey() },
+    );
+    const newer = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      { amountCents: 2500, idempotencyKey: newKey() },
+    );
+    if (!older.ok || !newer.ok) throw new Error("setup");
+    await db
+      .update(charges)
+      .set({ createdAt: new Date("2026-11-15T12:00:00.000Z") })
+      .where(eq(charges.id, older.charge.id));
+    await db
+      .update(charges)
+      .set({ createdAt: new Date("2026-11-15T12:05:00.000Z") })
+      .where(eq(charges.id, newer.charge.id));
+
+    const pending = await findResumableCharge({ db }, merchant.id);
+    expect(pending?.id).toBe(newer.charge.id);
+    expect(pending?.status).toBe("waiting_payment");
+
+    await db
+      .update(charges)
+      .set({ status: "expired", updatedAt: new Date() })
+      .where(eq(charges.id, newer.charge.id));
+
+    const after = await findResumableCharge({ db }, merchant.id);
+    expect(after?.id).toBe(older.charge.id);
+  });
+
+  it("un cobro en espera ya vencido deja de ofrecerse y pasa a expirado", async () => {
+    const merchant = await newMerchant();
+    const created = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      { amountCents: 1000, idempotencyKey: newKey() },
+    );
+    if (!created.ok) throw new Error("setup");
+    await db
+      .update(charges)
+      .set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(charges.id, created.charge.id));
+
+    const pending = await findResumableCharge({ db }, merchant.id);
+
+    expect(pending).toBeNull();
+    expect((await rowOf(created.charge.id)).status).toBe("expired");
+  });
+
+  it("un QR incierto se puede retomar para conservar la referencia", async () => {
+    const merchant = await newMerchant();
+    const created = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      { amountCents: 1301, idempotencyKey: newKey() },
+    );
+    if (!created.ok) throw new Error("setup");
+
+    const pending = await findResumableCharge({ db }, merchant.id);
+
+    expect(pending?.status).toBe("qr_uncertain");
+    expect(pending?.reference).toBe(created.charge.reference);
   });
 });
