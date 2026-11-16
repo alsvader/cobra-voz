@@ -106,8 +106,9 @@ npm run db:seed              # comercio demo + usuario demo@cobravoz.local
 npm run dev                  # http://localhost:3000
 ```
 
-Acceso local: `demo@cobravoz.local` / `cobravoz-local-dev` (solo desarrollo; no hay
-registro público, las cuentas se preconfiguran y se vinculan a un comercio).
+Acceso local: `demo@cobravoz.local` / `cobravoz-local-dev`. Solo abre el Supabase de
+esta máquina. El piloto no tiene registro público: el acceso de producción se
+comparte aparte y no se escribe en este repositorio.
 
 ### Importes
 
