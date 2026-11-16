@@ -14,6 +14,14 @@ describe("isPrivatePath", () => {
     expect(isPrivatePath("/cobros-falsos")).toBe(false);
   });
 
+  it("protege Ventas y el detalle", () => {
+    expect(isPrivatePath("/ventas")).toBe(true);
+    expect(isPrivatePath("/ventas/3f2b8c1e-0000-4000-8000-000000000001")).toBe(
+      true,
+    );
+    expect(isPrivatePath("/ventas-falsas")).toBe(false);
+  });
+
   it("deja públicas la landing y el acceso", () => {
     expect(isPrivatePath("/")).toBe(false);
     expect(isPrivatePath("/acceso")).toBe(false);

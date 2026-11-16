@@ -6,6 +6,8 @@ export const ROUTES = {
   /** Recorrido de cobro: P02 (`/cobro/confirmar`) y P03 (`/cobro/[id]`). */
   charge: "/cobro",
   confirmAmount: "/cobro/confirmar",
+  /** P04 Ventas y A03 Detalle (`/ventas/[id]`). */
+  sales: "/ventas",
 } as const;
 
 /** P03 — Cobro CoDi de un cobro concreto. */
@@ -13,11 +15,25 @@ export function chargePath(chargeId: string): string {
   return `${ROUTES.charge}/${chargeId}`;
 }
 
-/** Rutas privadas (requieren sesión). P04/A03 se añadirán en sus PR. */
+export type SaleOrigin = "inicio" | "ventas" | "cobro";
+
+/** A03. `from` dice a dónde vuelve «Volver»; solo se aceptan esos tres orígenes. */
+export function salePath(chargeId: string, from?: SaleOrigin): string {
+  const path = `${ROUTES.sales}/${chargeId}`;
+  return from ? `${path}?desde=${from}` : path;
+}
+
+export function saleOrigin(raw: string | undefined): SaleOrigin {
+  if (raw === "inicio" || raw === "cobro") return raw;
+  return "ventas";
+}
+
+/** Rutas privadas (requieren sesión). */
 export const PRIVATE_PATH_PREFIXES: readonly string[] = [
   ROUTES.app,
   ROUTES.settings,
   ROUTES.charge,
+  ROUTES.sales,
 ];
 
 export function isPrivatePath(pathname: string): boolean {

@@ -9,9 +9,13 @@ import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PendingChargeNotice } from "@/components/charge/pending-charge-notice";
 import { VoiceCaptureButton } from "@/components/charge/voice-capture-button";
+import { AppNav } from "@/components/sales/app-nav";
+import { DailySummary } from "@/components/sales/daily-summary";
+import { MovementHistory } from "@/components/sales/movement-history";
 import { findResumableCharge } from "@/modules/charges/service";
 import { requireMerchantContext } from "@/modules/identity/guards";
 import { getMerchantProfile } from "@/modules/merchant/service";
+import { getDailySummary, listRecentMovements } from "@/modules/sales/service";
 import { ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = {
@@ -21,7 +25,7 @@ export const metadata: Metadata = {
 
 export default function InicioPage() {
   return (
-    <AppShell>
+    <AppShell bottomNav={<AppNav current="inicio" />}>
       {/* El contenido depende de la sesión: se resuelve en la petición, tras Suspense. */}
       <Suspense fallback={<HomeSkeleton />}>
         <HomeContent />
@@ -33,9 +37,11 @@ export default function InicioPage() {
 async function HomeContent() {
   const { merchantId } = await requireMerchantContext();
   const db = getDb();
-  const [profile, pending] = await Promise.all([
+  const [profile, pending, summary, recent] = await Promise.all([
     getMerchantProfile(db, merchantId),
     findResumableCharge({ db }, merchantId),
+    getDailySummary({ db }, merchantId),
+    listRecentMovements({ db }, merchantId),
   ]);
 
   return (
@@ -75,6 +81,33 @@ async function HomeContent() {
         </Link>
 
         {pending ? <PendingChargeNotice charge={pending} /> : null}
+      </section>
+
+      <section aria-label="Hoy" className="flex flex-col gap-4 pb-4">
+        <DailySummary
+          variant="compact"
+          totalCents={summary.totalCents}
+          count={summary.count}
+        />
+        <div className="flex flex-col gap-2">
+          <h2 className="text-base font-semibold text-foreground">
+            Movimientos recientes
+          </h2>
+          <MovementHistory
+            variant="recent"
+            from="inicio"
+            initial={recent.movements}
+            nextCursor={recent.nextCursor}
+          />
+          {recent.nextCursor ? (
+            <Link
+              href={ROUTES.sales}
+              className={buttonVariants({ variant: "outline", size: "md" })}
+            >
+              Ver todas las ventas
+            </Link>
+          ) : null}
+        </div>
       </section>
     </>
   );

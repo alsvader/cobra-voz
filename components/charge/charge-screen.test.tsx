@@ -121,6 +121,10 @@ describe("ChargeView — variantes por estado persistido", () => {
       "href",
       "/inicio",
     );
+    expect(screen.getByRole("link", { name: "Ver detalle" })).toHaveAttribute(
+      "href",
+      `/ventas/${ID}?desde=cobro`,
+    );
   });
 
   it("expirado: no es un rechazo, aclara el posible pago tardío y no muestra QR", () => {

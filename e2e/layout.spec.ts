@@ -55,6 +55,7 @@ authTest.describe("Layout móvil de pantallas con sesión", () => {
 
         const screens = [
           ["/inicio", tenant.merchantName!],
+          ["/ventas", "Total cobrado hoy"],
           ["/configuracion", tenant.merchantName!],
           ["/cobro/confirmar", "Importe a cobrar"],
           // Importe máximo: la cifra no debe desbordar ni truncarse.

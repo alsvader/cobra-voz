@@ -139,7 +139,9 @@ test.describe("P03 — QR y estado «Esperando pago»", () => {
     await page.getByRole("link", { name: "Retomar cobro" }).click();
 
     await expect(page).toHaveURL(new RegExp(`/cobro/${charge.id}$`));
-    await expect(page.getByText("Esperando pago")).toBeVisible();
+    await expect(
+      page.getByRole("status").getByText("Esperando pago"),
+    ).toBeVisible();
   });
 });
 

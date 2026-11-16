@@ -4,7 +4,7 @@ import { AmountDisplay } from "@/components/charge/amount-display";
 import { CoDiQrCard } from "@/components/charge/codi-qr-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES, salePath } from "@/lib/routes";
 import { formatMxn } from "@/modules/charges/amount";
 import type { ChargeDto } from "@/modules/charges/types";
 
@@ -67,6 +67,14 @@ export function ChargeView({
       })}
     >
       {label}
+    </Link>
+  );
+  const detail = (
+    <Link
+      href={salePath(charge.id, "cobro")}
+      className={buttonVariants({ variant: "outline", size: "md" })}
+    >
+      Ver detalle
     </Link>
   );
 
@@ -151,7 +159,10 @@ export function ChargeView({
           </Notice>
           {heading}
           {referenceLine}
-          {goHome("Nuevo cobro")}
+          <div className="flex flex-col gap-3">
+            {goHome("Nuevo cobro")}
+            {detail}
+          </div>
         </Stack>
       );
 
@@ -164,7 +175,10 @@ export function ChargeView({
           </Notice>
           {heading}
           {referenceLine}
-          {goHome("Nuevo cobro")}
+          <div className="flex flex-col gap-3">
+            {goHome("Nuevo cobro")}
+            {detail}
+          </div>
         </Stack>
       );
 
@@ -176,7 +190,10 @@ export function ChargeView({
           </Notice>
           {heading}
           {referenceLine}
-          {goHome("Volver a Inicio")}
+          <div className="flex flex-col gap-3">
+            {goHome("Volver a Inicio")}
+            {detail}
+          </div>
         </Stack>
       );
 
@@ -203,7 +220,10 @@ export function ChargeView({
           </Notice>
           {heading}
           {referenceLine}
-          {goHome("Volver a Inicio")}
+          <div className="flex flex-col gap-3">
+            {goHome("Volver a Inicio")}
+            {detail}
+          </div>
         </Stack>
       );
   }

@@ -25,8 +25,13 @@ test.describe("P01 Inicio → captura manual", () => {
     await expect(
       page.getByRole("link", { name: "Ingresar importe manualmente" }),
     ).toBeVisible();
-    // Navegación inferior, resumen y movimientos pertenecen a PR posteriores.
-    await expect(page.getByRole("navigation")).toHaveCount(0);
+    const nav = page.getByRole("navigation", { name: "Principal" });
+    await expect(nav.getByRole("link", { name: "Inicio" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(nav.getByRole("link", { name: "Ventas" })).toBeVisible();
+    await expect(page.getByText("Total cobrado hoy")).toBeVisible();
   });
 
   test("«Ingresar importe manualmente» abre P02 con el campo enfocado", async ({
