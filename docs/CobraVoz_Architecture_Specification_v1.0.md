@@ -24,7 +24,7 @@
 | ADR-10 | Pey / CoDi, QR generado en backend, webhooks firmados | Cobro bancario verificable |
 | ADR-11 | Vercel + Supabase para producción | Infraestructura administrada |
 | ADR-12 | Polling controlado del estado; no WebSockets | Complejidad mínima |
-| ADR-13 | Vercel Cron protegido para conciliación inicial cada 5 minutos | Recuperación complementaria a webhooks |
+| ADR-13 | Supabase Cron (`pg_cron` + `pg_net`) llama cada 5 minutos a `GET /api/internal/reconcile` | Vercel Hobby solo permite un cron al día; el secreto vive en Vault |
 | ADR-14 | Dinero en centavos enteros; persistencia atómica e idempotente | Seguridad financiera |
 
 **Límites:** un comerciante y una cuenta receptora para piloto. No POS completo, inventario, múltiples pasarelas, registro público, escucha permanente ni colas/microservicios en MVP.
@@ -48,7 +48,7 @@ flowchart TB
     Charges -->|API key servidor| Pey[Pey / CoDi]
     Pey -->|Webhook firmado| Payments
     Payments -->|Consultas conciliación| Pey
-    Cron[Vercel Cron protegido] --> Payments
+    Cron[Supabase Cron] -->|GET /api/internal/reconcile| API
     App -->|SpeechSynthesis en dispositivo| Audio[Anuncio audible]
 ```
 
@@ -194,7 +194,7 @@ sequenceDiagram
 
 - P03 pendiente consulta `/api/charges/:id` periódicamente mientras app activa; frecuencia ajustable tras mediciones, sin WebSockets.
 - «Consultar nuevamente» invoca `/api/charges/:id/reconcile`, usando consulta a Pey e idéntica lógica de procesamiento.
-- Vercel Cron protegido por `CRON_SECRET` inspecciona pendientes, expirados recientes, cierres locales relevantes e incidencias recuperables; **intervalo inicial 5 min**.
+- Supabase Cron (`pg_cron` + `pg_net`), protegido por `CRON_SECRET`, inspecciona pendientes, expirados recientes, cierres locales relevantes e incidencias recuperables; **intervalo inicial 5 min**. El horario no está en Vercel: el plan Hobby rechaza una expresión que corre más de una vez al día.
 - Consultas oficiales aprobadas: `GET /transaction/codi/qr/:id` y `GET /transaction/:id`; paginar cuando aplique (`nextToken`).
 - Reconciliar solo si el QR/ID externo conocido está disponible; no inferir QR que nunca devolvió identificador.
 - Tras reapertura, P01 recupera del backend estados y pendientes; **sin** anuncio de pagos ocurridos mientras app estaba cerrada.
@@ -229,7 +229,7 @@ sequenceDiagram
 | Preview | Vercel Preview + servicios separados | Mock de eventos/QR; por defecto sin transacciones bancarias |
 | Production | Vercel + Supabase Pro (propuesta aprobada) | Pey real con credenciales protegidas |
 
-- Vercel Pro propuesto para cron cada 5 min; verificar límites/precios vigentes y tolerancia a fallas de ejecución.
+- El cron de 5 min corre en Supabase (`pg_cron`), no en Vercel. Hobby corta la función cerca de los 10 s; una pasada más larga se retoma en el siguiente ciclo.
 - Supabase Pro propuesto para respaldos automáticos; verificar restauración y conciliar pagos posteriores a backup.
 - Usar transaction pooler en runtime serverless; configurar cliente Drizzle/driver para limitaciones de prepared statements del pooler.
 - Migraciones versionadas, permisos mínimos y conexión apropiada de migración; separar entornos y secretos.

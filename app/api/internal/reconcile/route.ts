@@ -8,8 +8,10 @@ import { errorJson, privateJson } from "@/lib/security/responses";
 /**
  * GET /api/internal/reconcile — pasada de conciliación (Architecture §9).
  *
- * La llama el cron de Vercel cada 5 minutos con
+ * La llama Supabase Cron (pg_cron + pg_net) cada 5 minutos con
  * `Authorization: Bearer <CRON_SECRET>`. Sin ese secreto no hace nada.
+ * Vercel Hobby no admite ese intervalo; el horario está en
+ * `scripts/db/schedule-reconcile-cron.sql`.
  * No usa sesión de comerciante: el secreto es la única autenticación.
  */
 export async function GET(request: Request) {

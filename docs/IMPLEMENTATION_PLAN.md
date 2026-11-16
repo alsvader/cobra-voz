@@ -156,7 +156,7 @@
 
 **Tareas**
 - [ ] Configurar Vercel Production, Preview aislado, Supabase productivo y rotación/gestión de secretos.
-- [ ] Configurar Vercel Cron protegido (`CRON_SECRET`) con intervalo inicial de 5 min, sujeto al plan contratado.
+- [ ] Programar Supabase Cron (`pg_cron` + `pg_net`) cada 5 min contra `GET /api/internal/reconcile`, con la URL y `CRON_SECRET` en Vault. Vercel Hobby no admite ese intervalo; el SQL está en `scripts/db/schedule-reconcile-cron.sql`.
 - [ ] Revisar rate limiting, CSRF/Origin, cookies, CORS, no-cache de respuestas privadas, permisos mínimos y redacción de logs.
 - [ ] Verificar respaldos Supabase Pro y documentar restauración/conciliación posterior.
 - [ ] Añadir observabilidad de QR incierto, firma inválida, caída de DB, evento duplicado y tareas fallidas.

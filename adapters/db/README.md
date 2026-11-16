@@ -34,6 +34,10 @@ propósito: no se mezclan las dos herramientas. Para cambios que Drizzle no
 expresa (privilegios, funciones) se usa `drizzle-kit generate --custom`.
 CI falla si el esquema cambia sin su migración.
 
+El cron de conciliación es la excepción: `scripts/db/schedule-reconcile-cron.sql`
+se aplica a mano en el Supabase alojado. `pg_cron` no está precargado en el
+Postgres local y meterlo en `drizzle/` rompería `db:migrate`.
+
 ## Decisiones de modelo
 
 - **Dinero:** `amount_cents` entero, `> 0`, `currency = 'MXN'` (CHECK).
