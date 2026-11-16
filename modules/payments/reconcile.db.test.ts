@@ -54,18 +54,23 @@ async function openCharge(
   return { charge: created.charge, qr };
 }
 
+/** Pago de prueba con referencia y cuenta siempre presentes. */
+type SeededPayment = QueriedPayment & {
+  numRef: number;
+  bankAccountId: string;
+};
+
 function matchingPayment(
   qr: { peyQrId: string; numRef: number },
   account: string,
-  overrides: Partial<QueriedPayment> = {},
-): QueriedPayment {
+  overrides: Partial<SeededPayment> = {},
+): SeededPayment {
   return {
-    transactionId: `tx-${randomUUID()}`,
-    amountCents: 15050,
-    numRef: qr.numRef,
-    bankAccountId: account,
-    paidAt: new Date("2026-11-15T18:00:00.000Z"),
-    ...overrides,
+    transactionId: overrides.transactionId ?? `tx-${randomUUID()}`,
+    amountCents: overrides.amountCents ?? 15050,
+    numRef: overrides.numRef ?? qr.numRef,
+    bankAccountId: overrides.bankAccountId ?? account,
+    paidAt: overrides.paidAt ?? new Date("2026-11-15T18:00:00.000Z"),
   };
 }
 
