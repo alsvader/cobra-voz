@@ -26,6 +26,15 @@ describe("readSignupAuthConfig", () => {
       }),
     ).toEqual(config);
   });
+
+  it("quita la barra final de la URL", () => {
+    expect(
+      readSignupAuthConfig({
+        NEXT_PUBLIC_SUPABASE_URL: "https://auth.example/",
+        SUPABASE_SECRET_KEY: "secret-key",
+      })?.supabaseUrl,
+    ).toBe("https://auth.example");
+  });
 });
 
 describe("createConfirmedAuthUser", () => {
@@ -52,7 +61,29 @@ describe("createConfirmedAuthUser", () => {
     };
     expect(body.email_confirm).toBe(true);
     expect(body.password).toBe("secreta-12");
-    expect(JSON.stringify(init?.headers)).toContain("secret-key");
+    expect(init?.headers).toMatchObject({
+      apikey: "secret-key",
+      Authorization: "Bearer secret-key",
+    });
+  });
+
+  it("no manda una clave sb_secret como Bearer", async () => {
+    const fetchImpl = vi.fn(async () => json({ id: "user-1" }));
+
+    await createConfirmedAuthUser(
+      { supabaseUrl: "https://auth.example", secretKey: "sb_secret_test" },
+      { email: "a@comercio.test", password: "secreta-12" },
+      fetchImpl as typeof fetch,
+    );
+
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(init?.headers).toEqual({
+      apikey: "sb_secret_test",
+      "Content-Type": "application/json",
+    });
   });
 
   it("reconoce un correo que ya existe", async () => {

@@ -62,6 +62,20 @@ export type RegistrationAuth = {
   deleteUser(userId: string): Promise<void>;
 };
 
+function postgresCode(error: unknown): string {
+  let current: unknown = error;
+  for (
+    let depth = 0;
+    depth < 4 && current && typeof current === "object";
+    depth += 1
+  ) {
+    if ("code" in current && typeof current.code === "string")
+      return current.code;
+    current = "cause" in current ? current.cause : undefined;
+  }
+  return "unknown";
+}
+
 function invalidField(input: RegistrationInput): RegistrationError | null {
   const parsed = registrationSchema.safeParse(input);
   if (parsed.success) return null;
@@ -113,7 +127,13 @@ export async function registerMerchant(
       name: parsed.name,
       bankAccountId: deps.bankAccountId,
     });
-  } catch {
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "register_merchant_failed",
+        code: postgresCode(error),
+      }),
+    );
     await deps.auth.deleteUser(created.id);
     return { ok: false, error: "unavailable" };
   }

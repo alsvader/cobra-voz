@@ -36,7 +36,12 @@ export async function registerAction(
       rateKey: clientIp(headerStore),
       auth: {
         createConfirmedUser: async (input) => {
-          if (!config) return { ok: false, reason: "failed" };
+          if (!config) {
+            console.error(
+              JSON.stringify({ event: "register_auth_unconfigured" }),
+            );
+            return { ok: false, reason: "failed" };
+          }
           const created = await createConfirmedAuthUser(config, input);
           if (!created.ok) return created;
           return { ok: true, id: created.user.id };

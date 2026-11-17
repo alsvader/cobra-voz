@@ -1,4 +1,5 @@
 import "server-only";
+import { authAdminHeaders } from "./headers";
 
 /**
  * Alta de usuarios ya confirmados, para el registro público.
@@ -17,7 +18,7 @@ export type CreateAuthUserResult =
 export function readSignupAuthConfig(
   env: Record<string, string | undefined> = process.env,
 ): SignupAuthConfig | null {
-  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/+$/, "");
   const secretKey = env.SUPABASE_SECRET_KEY?.trim();
   if (!supabaseUrl || !secretKey) return null;
   return { supabaseUrl, secretKey };
@@ -53,6 +54,13 @@ export async function createConfirmedAuthUser(
   if (response.ok) {
     const id = body?.id ?? body?.user?.id;
     if (id) return { ok: true, user: { id } };
+    console.error(
+      JSON.stringify({
+        event: "register_auth_failed",
+        status: response.status,
+        code: "missing_id",
+      }),
+    );
     return { ok: false, reason: "failed" };
   }
 
@@ -63,6 +71,13 @@ export async function createConfirmedAuthUser(
   ) {
     return { ok: false, reason: "email_exists" };
   }
+  console.error(
+    JSON.stringify({
+      event: "register_auth_failed",
+      status: response.status,
+      code: code ?? "unknown",
+    }),
+  );
   return { ok: false, reason: "failed" };
 }
 
@@ -83,9 +98,5 @@ export async function deleteAuthUser(
 }
 
 function authHeaders(config: SignupAuthConfig) {
-  return {
-    apikey: config.secretKey,
-    Authorization: `Bearer ${config.secretKey}`,
-    "Content-Type": "application/json",
-  };
+  return authAdminHeaders(config.secretKey);
 }

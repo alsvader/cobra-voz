@@ -3,6 +3,7 @@
  * seed, pruebas de integración y E2E. Usa la clave secreta, así que se niega a
  * apuntar a una instancia que no sea local. No lo importes desde código de la app.
  */
+import { authAdminHeaders } from "../../adapters/auth/headers";
 import { isLocalUrl } from "./local-guard";
 
 export type AuthUser = { id: string; email?: string };
@@ -26,11 +27,7 @@ export function readAuthAdminConfig(
 }
 
 function headers({ secretKey }: AuthAdminConfig) {
-  return {
-    apikey: secretKey,
-    Authorization: `Bearer ${secretKey}`,
-    "Content-Type": "application/json",
-  };
+  return authAdminHeaders(secretKey);
 }
 
 export class AuthAdminError extends Error {
