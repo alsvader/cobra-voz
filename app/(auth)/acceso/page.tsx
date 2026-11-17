@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import { Logo } from "@/components/brand/logo";
 import { AppShell } from "@/components/ui/app-shell";
 import { LoginForm } from "@/components/auth/login-form";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,7 +30,7 @@ export default function AccesoPage({
     <AppShell>
       <div className="flex flex-1 flex-col justify-center gap-8 py-10">
         <div className="flex flex-col gap-2">
-          <p className="text-2xl font-bold text-foreground">CobraVoz</p>
+          <Logo className="h-16" />
           <h1 className="text-xl font-semibold text-foreground">
             Iniciar sesión
           </h1>

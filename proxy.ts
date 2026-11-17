@@ -30,6 +30,6 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Excluye estáticos, iconos y los archivos de la PWA (deben ser públicos).
   matcher: [
-    "/((?!_next/static|_next/image|icons/|icon.png|apple-icon.png|manifest.webmanifest|sw.js|offline.html).*)",
+    "/((?!_next/static|_next/image|icons/|brand/|favicon.ico|icon.svg|apple-icon.png|manifest.webmanifest|sw.js|offline.html).*)",
   ],
 };

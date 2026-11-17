@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { Logo } from "@/components/brand/logo";
 import { headerLinks, loginLink } from "@/components/landing/content";
 import { LandingAnchor } from "@/components/landing/landing-anchor";
 
@@ -83,10 +84,10 @@ export function MobileNavigation() {
         />
         <LandingAnchor
           href="#inicio"
-          className="absolute top-0 left-0 flex h-16 items-center px-4 text-2xl font-bold text-foreground min-[360px]:px-5"
+          className="absolute top-0 left-0 flex h-16 items-center px-4 min-[360px]:px-5"
           onNavigate={close}
         >
-          CobraVoz
+          <Logo className="h-14" />
         </LandingAnchor>
         <ul className="relative flex flex-col">
           {headerLinks.map((link, index) => (

@@ -191,7 +191,6 @@ Detalles del modelo de datos, estados y seguridad: [`adapters/db/README.md`](ada
 | `npm run db:*`                    | Supabase local, migraciones y seed (ver `adapters/db`)     |
 | `npm run test:db`                 | Pruebas de integración contra Postgres local               |
 | `npm run check:bundle`            | Falla si hay secretos de servidor en el bundle del cliente |
-| `npm run icons`                   | Regenera los iconos temporales de la PWA                   |
 | `npm run check`                   | `lint` + `typecheck` + `test`                              |
 
 La primera vez que se corran los E2E: `npx playwright install chromium`

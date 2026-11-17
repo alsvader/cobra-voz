@@ -6,7 +6,7 @@
 **Stack visual aprobado:** Next.js 16, React, Tailwind CSS 4, shadcn/ui, Lucide icons  
 **Idioma:** Español de México (`es-MX`)
 
-> **Instrucción para IA:** implementa este sistema visual tal como está, sin solicitar nuevas decisiones de branding. Cuando haya ambigüedad, prioriza legibilidad, usabilidad en exteriores, accesibilidad WCAG AA y mínimo número de elementos. No cambies el PRD v1.0, la UX Specification v1.0 ni la Architecture Specification v1.0. Esta guía es la propuesta práctica necesaria para iniciar el MVP; no se ha realizado una revisión visual high-fidelity ni se ha aprobado un logotipo final.
+> **Instrucción para IA:** implementa este sistema visual tal como está, sin solicitar nuevas decisiones de branding. Cuando haya ambigüedad, prioriza legibilidad, usabilidad en exteriores, accesibilidad WCAG AA y mínimo número de elementos. No cambies el PRD v1.0, la UX Specification v1.0 ni la Architecture Specification v1.0. Esta guía es la propuesta práctica necesaria para iniciar el MVP. La identidad vigente es Brand Assets v1.0 (§11).
 
 ## 0. Principio y dirección estética
 
@@ -277,15 +277,20 @@ Evitar sombras dramáticas, gradientes fuertes, blur/transparencias tipo glassmo
 | P02 Confirmación | Volver; AmountDisplay; transcripción; Primary «Confirmar importe»; Corregir/Volver a hablar/Cancelar | Importe legible y acción explícita |
 | P03 CoDi | Estado actual; importe; QR real si existe; referencia/expiración; acciones por estado | Claridad bancaria, nada de QR falso |
 | P04 Ventas | Header; DailySummary; movimientos en TransactionRow; cargar más; BottomNav | Consulta simple sin gráficos |
-| A01 Acceso | Wordmark textual CobraVoz; slogan corto; correo/contraseña; CTA Iniciar sesión | Simpleza |
+| A01 Acceso | Logo horizontal CobraVoz; slogan corto; correo/contraseña; CTA Iniciar sesión | Simpleza |
 | A02 Configuración | Volver; negocio/cuenta en solo lectura; switch anuncio de voz; Cerrar sesión | Sin cambiar banco |
 | A03 Detalle | Volver; PaymentStatusCard; importe solicitado/recibido, fechas, método, referencias, explicaciones | Solo lectura |
 
-## 11. Branding mínimo viable
+## 11. Identidad de marca
 
-- Wordmark temporal **CobraVoz** en DM Sans 700 con color `#172D32` (o blanco sobre primary); no crear logotipo ilustrado sin encargo.
-- Isotipo temporal opcional: ícono `mic` dentro de círculo teal para favicon/PWA, con contraste; **no declarar identidad final**.
-- La tipografía y los colores definidos permiten una experiencia consistente sin fase extensa de branding.
+Fuente: Brand Assets v1.0, Ruta A, archivada en `brand/`. Lo que sirve la app está en `public/favicon.ico`, `app/icon.svg`, `app/apple-icon.png`, `public/icons/` y `public/brand/logos/cobravoz-logo-primary.svg`. El ICO vive en `public/` porque Next.js no decodifica este archivo desde `app/favicon.ico` (los PNG internos no están en RGBA).
+
+- Logo horizontal principal en el header y el menú móvil de la landing (56 px). En el footer, Acceso y Registro, 64 px. El nombre accesible sigue siendo «CobraVoz».
+- Verde de logo `#078C7B`. Es distinto del teal de interfaz `#107B75`. `theme_color` sigue en `#107B75`.
+- Ink del wordmark dentro del logo: `#172D32`. Isotipo en íconos: blanco `#FFFFFF` sobre fondo opaco `#078C7B`.
+- La inversa blanca y el monocromo oscuro están en `brand/logos/` para fondos oscuros. Esta interfaz usa solo la variante principal.
+- Favicon, Apple Touch e íconos PWA (`any` y `maskable`, 192 y 512) salen de ese paquete. No hay script que los regenere.
+- Inicio, Ventas y Configuración muestran el nombre del comercio en el encabezado.
 - No generar ilustraciones, mascotas, fondos elaborados ni fotografías para el MVP.
 
 ## 12. Checklist de entrega visual (DoD)

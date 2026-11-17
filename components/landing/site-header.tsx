@@ -1,3 +1,4 @@
+import { Logo } from "@/components/brand/logo";
 import { headerLinks, loginLink } from "@/components/landing/content";
 import { LandingAnchor } from "@/components/landing/landing-anchor";
 import { MobileNavigation } from "@/components/landing/mobile-navigation";
@@ -6,11 +7,8 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-canvas">
       <div className="landing-header mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-4 min-[360px]:px-5 lg:px-12">
-        <LandingAnchor
-          href="#inicio"
-          className="cursor-pointer text-2xl font-bold text-foreground transition-colors duration-150 ease-out-strong hover:text-teal-700"
-        >
-          CobraVoz
+        <LandingAnchor href="#inicio" className="inline-flex cursor-pointer">
+          <Logo className="h-14" />
         </LandingAnchor>
         <nav
           aria-label="Secciones"

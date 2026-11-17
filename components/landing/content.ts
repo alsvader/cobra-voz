@@ -203,7 +203,6 @@ export const finalCta = {
 } as const;
 
 export const footer = {
-  wordmark: "CobraVoz",
   slogan: "Cobra fácilmente, sin dejar de atender tu negocio.",
   explore: "Explora",
   help: "Ayuda",

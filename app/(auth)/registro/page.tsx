@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { RegisterForm } from "@/components/auth/register-form";
+import { Logo } from "@/components/brand/logo";
 import { AppShell } from "@/components/ui/app-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveMerchantContext } from "@/modules/identity/session";
@@ -18,7 +19,7 @@ export default function RegistroPage() {
     <AppShell>
       <div className="flex flex-1 flex-col justify-center gap-8 py-10">
         <div className="flex flex-col gap-2">
-          <p className="text-2xl font-bold text-foreground">CobraVoz</p>
+          <Logo className="h-16" />
           <h1 className="text-xl font-semibold text-foreground">
             Crear comercio
           </h1>

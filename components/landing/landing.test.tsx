@@ -103,6 +103,15 @@ describe("Landing del MVP", () => {
     expect(
       screen.getAllByRole("link", { name: "Cómo funciona" }).length,
     ).toBeGreaterThan(0);
-    expect(document.querySelectorAll("img")).toHaveLength(0);
+
+    const logos = document.querySelectorAll("img");
+    expect(logos).toHaveLength(3);
+    for (const logo of logos) {
+      expect(logo).toHaveAttribute("alt", "CobraVoz");
+      expect(logo).toHaveAttribute(
+        "src",
+        "/brand/logos/cobravoz-logo-primary.svg",
+      );
+    }
   });
 });
