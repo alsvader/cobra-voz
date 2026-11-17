@@ -40,7 +40,7 @@ describe("createConfirmedAuthUser", () => {
       ),
     ).resolves.toEqual({ ok: true, user: { id: "user-1" } });
 
-    const [url, init] = (fetchImpl.mock.calls[0] ?? []) as [
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [
       string,
       RequestInit,
     ];
