@@ -25,8 +25,8 @@ const loginSchema = z.object({
 /**
  * Inicia sesión con correo y contraseña (Supabase Auth). Es un Server Action:
  * Next.js ya verifica que el `Origin` coincida con el host (CSRF).
- * Sin registro público: solo entran cuentas preconfiguradas Y vinculadas a un
- * comercio.
+ * Entran las cuentas vinculadas a un comercio, incluidas las que se crean
+ * en `/registro`.
  */
 export async function loginAction(
   _previous: LoginState,

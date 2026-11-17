@@ -175,7 +175,7 @@ La corrección manual usa campo dentro de P02; validación visible y CTA deshabi
 - Identidad CobraVoz, propuesta de valor breve.
 - Correo electrónico y contraseña, botón **Iniciar sesión**.
 - Mensajes claros de credenciales incorrectas, sesión expirada y problema de conexión.
-- Una cuenta preconfigurada para el piloto; **sin** registro público ni administración de usuarios.
+- Enlace **Crear comercio** hacia el alta: nombre, correo y contraseña. No hay correo de verificación ni administración de usuarios.
 
 ### A02 — Configuración (aprobado v1.0)
 
@@ -269,7 +269,7 @@ Los tokens y estilo concreto se detallan en `DESIGN.md` (guía nueva de implemen
 
 | ID | Escenario a revisar | Condición de aprobación |
 |---|---|---|
-| UX-01 | Primer acceso | Login conduce a Inicio sin registro público |
+| UX-01 | Primer acceso | Crear comercio o iniciar sesión conduce a Inicio |
 | UX-02 | Dictar importe | Mostrar estado de escucha/procesamiento y P02 |
 | UX-03 | Corregir importe | Misma P02; confirmación explícita obligatoria |
 | UX-04 | Voz fallida | Alternativa manual visible, sin QR creado |

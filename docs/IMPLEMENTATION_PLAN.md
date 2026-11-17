@@ -17,7 +17,9 @@
 | `DESIGN.md` | Tokens, tipografía, layouts y componentes, sin crear pantallas adicionales |
 | `IMPLEMENTATION_PLAN.md` | Secuencia de implementación; no redefine las reglas anteriores |
 
-**Incluido:** un comerciante, una cuenta receptora configurada, acceso sin registro público, voz con entrada manual, importe confirmado, QR Pey real, webhook, conciliación, ventas y preferencias de audio. **Excluido:** inventario, catálogo de productos, carrito, NFC, múltiples negocios, pagos manualmente acreditados, POS completo, exportación, panel admin, pagos offline, tiempo real vía sockets, reconocimiento de voz continuo.
+**Incluido:** registro de comercios con correo y contraseña (sin verificación de correo), una cuenta receptora Pey compartida vía `PEY_BANK_ACCOUNT_ID`, voz con entrada manual, importe confirmado, QR Pey real, webhook, conciliación, ventas y preferencias de audio. **Excluido:** inventario, catálogo de productos, carrito, NFC, varias cuentas receptoras, pagos manualmente acreditados, POS completo, exportación, panel admin, pagos offline, tiempo real vía sockets, reconocimiento de voz continuo, verificación de correo y recuperación de contraseña.
+
+**Ajuste de 2026-11-16:** el piloto ya no es un único comercio preconfigurado. `/registro` crea el comercio y copia la cuenta Pey del servidor. La landing no muestra un botón de registro.
 
 ## 2. Forma de ejecución
 
@@ -64,7 +66,7 @@
 **Tareas**
 - [ ] Crear esquema Drizzle/migraciones para `merchants`, `merchant_users`, `merchant_preferences`, `charges`, `codi_qrs`, `payments`, `payment_events`, `payment_incidents` conforme a la arquitectura congelada.
 - [ ] Definir claves primarias UUID, FKs, índices, restricciones de unicidad y centavos enteros; documentar el mapeo de estados.
-- [ ] Configurar Supabase Auth SSR y usuario/negocio preconfigurados sin registro público.
+- [ ] Configurar Supabase Auth SSR. El seed local crea el comercio demo; los comercios nuevos se crean en `/registro`.
 - [ ] Proteger endpoints con verificación de identidad y pertenencia al `merchant_id`.
 - [ ] Crear A01 Acceso, A02 Configuración y cierre de sesión con las pantallas UX aprobadas.
 - [ ] Configurar conexión pooled en runtime y conexión apropiada para migraciones.

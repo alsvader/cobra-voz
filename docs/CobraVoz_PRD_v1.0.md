@@ -71,7 +71,7 @@ El objetivo es demostrar **de extremo a extremo con Pey/CoDi real** el recorrido
 
 | Módulo | ID | En el MVP |
 |---|---|---|
-| Acceso y comercio | M01 | Login, sesión, consulta de negocio y cuenta receptora preconfigurada; preferencias de audio |
+| Acceso y comercio | M01 | Registro con correo y contraseña sin verificación de correo, login, sesión, consulta de negocio y cuenta receptora compartida; preferencias de audio |
 | Cobro por voz | M02 | Pulsar para hablar, transcribir, interpretar, revisar, corregir o capturar importe manualmente |
 | QR y pagos CoDi | M03 | Crear QR real mediante Pey, recibir webhook, consultar, conciliar y persistir pagos |
 | Confirmación y notificaciones | M04 | Feedback de estados, confirmación visual y audio de pagos nuevos verificados cuando aplique |
@@ -79,7 +79,7 @@ El objetivo es demostrar **de extremo a extremo con Pey/CoDi real** el recorrido
 
 ### Restricciones de alcance
 
-- Un negocio/merchant y una cuenta bancaria receptora configurada para el piloto.
+- Varios comercios pueden registrarse. Todos usan la misma cuenta receptora Pey, configurada en el servidor.
 - Una solicitud de cobro **visible y activa** por sesión del comerciante; no se abre otra por duplicación de pulsaciones.
 - Idioma de interfaz y voz: español de México.
 - PWA mobile-first; no aplicación nativa en el MVP.
@@ -95,7 +95,7 @@ No implementar en el MVP:
 - Marcar manualmente un cobro como pagado.
 - Reembolsos, devoluciones, cancelación bancaria o contracargos administrados desde la app.
 - Facturación electrónica, exportación contable, filtros avanzados, gráficas o reportes complejos.
-- Registro público de comercios, panel administrativo sofisticado, equipos con múltiples permisos.
+- Verificación de correo, recuperación de contraseña, panel administrativo y equipos con múltiples permisos.
 - Reconocimiento continuo, activación por palabra clave o asistente conversacional.
 - Notificaciones push o anuncios de pagos cuando la PWA está cerrada.
 - QR de demostración falso presentado como cobro real.
@@ -145,7 +145,7 @@ No implementar en el MVP:
 
 | ID | Regla |
 |---|---|
-| RN-01 | El piloto opera con un comerciante/negocio y una cuenta receptora bancaria previamente configurados. |
+| RN-01 | El registro crea un comercio con correo y contraseña. Todos los comercios usan la misma cuenta receptora Pey configurada en el servidor. El comerciante no la cambia desde la app. |
 | RN-02 | Todo importe debe ser mayor que cero, estar expresado en MXN y tener como máximo dos decimales. |
 | RN-03 | El comerciante debe revisar y confirmar explícitamente el importe antes de solicitar un QR. |
 | RN-04 | Si la voz falla o es ambigua, se debe permitir reintento o captura manual; nunca asumir un importe. |

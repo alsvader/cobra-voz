@@ -1,6 +1,7 @@
 export const ROUTES = {
   home: "/",
   login: "/acceso",
+  register: "/registro",
   app: "/inicio",
   settings: "/configuracion",
   /** Recorrido de cobro: P02 (`/cobro/confirmar`) y P03 (`/cobro/[id]`). */

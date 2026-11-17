@@ -1,8 +1,9 @@
 /**
  * Seed CONTROLADO para desarrollo local.
  *
- * Crea el comerciante demo, sus preferencias y un usuario de Auth ligado a él
- * (no existe registro público). Es idempotente y se NIEGA a correr si la base
+ * Crea el comerciante demo, sus preferencias y un usuario de Auth ligado a él.
+ * El alta de comercios nuevos está en `/registro`; este seed sigue siendo
+ * solo local. Es idempotente y se NIEGA a correr si la base
  * de datos, Supabase o el entorno no son locales: nunca debe tocar Preview ni
  * Producción.
  *

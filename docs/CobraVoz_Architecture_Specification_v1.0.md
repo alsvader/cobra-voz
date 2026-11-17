@@ -16,7 +16,7 @@
 | ADR-02 | Monolito modular; Next.js Route Handlers | MVP simple sin microservicios |
 | ADR-03 | Tailwind CSS 4 + shadcn/ui | UI consistente y accesible |
 | ADR-04 | PostgreSQL administrado en Supabase + Drizzle ORM | Integridad relacional y migraciones tipadas |
-| ADR-05 | Supabase Auth SSR | Sesiones del comerciante preconfigurado |
+| ADR-05 | Supabase Auth SSR | Correo y contraseña. `/registro` crea el comercio sin verificación de correo |
 | ADR-06 | `getUserMedia` + `MediaRecorder`, grabación breve | Captura web multiplataforma |
 | ADR-07 | OpenAI `gpt-transcribe` inicial, sustituible si fallan pruebas | STT desacoplado |
 | ADR-08 | Parser determinista en TS | Importe verificable, sin inferencia probabilística monetaria |
@@ -27,7 +27,7 @@
 | ADR-13 | Supabase Cron (`pg_cron` + `pg_net`) llama cada 5 minutos a `GET /api/internal/reconcile` | Vercel Hobby solo permite un cron al día; el secreto vive en Vault |
 | ADR-14 | Dinero en centavos enteros; persistencia atómica e idempotente | Seguridad financiera |
 
-**Límites:** un comerciante y una cuenta receptora para piloto. No POS completo, inventario, múltiples pasarelas, registro público, escucha permanente ni colas/microservicios en MVP.
+**Límites:** varios comercios pueden registrarse; todos copian la misma cuenta receptora Pey desde `PEY_BANK_ACCOUNT_ID`. No POS completo, inventario, múltiples pasarelas, verificación de correo, escucha permanente ni colas/microservicios en MVP.
 
 ## 2. Contexto y componentes
 
@@ -213,10 +213,10 @@ Contrato cotejado el 2026-11-16 con el OpenAPI de Pey del 2026-10-20. En el QR r
 
 ## 11. Autenticación, autorización y defensa en profundidad
 
-- Supabase Auth correo/contraseña; sin registro público.
+- Supabase Auth correo/contraseña. `/registro` crea el usuario ya confirmado y su comercio; no envía correo de verificación.
 - SSR con sesión basada en cookies seguras; validar identidad y relación merchant–usuario en servidor, incluidas rutas de lectura.
 - Drizzle accede a Postgres desde backend: implementar scoping explícito por `merchant_id`, no asumir RLS automático sobre conexión privilegiada.
-- `DATABASE_URL`, `PEY_API_KEY`, `PEY_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `CRON_SECRET` únicamente server-side.
+- `DATABASE_URL`, `PEY_API_KEY`, `PEY_BANK_ACCOUNT_ID`, `PEY_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `CRON_SECRET` únicamente server-side.
 - Clave publicable de Supabase puede estar en cliente; **nunca** exponer service-role/secret keys o API keys de Pey/OpenAI.
 - Validación de DTO, límite de solicitudes (sobre todo voz, login y cobros), CSRF/Origin en mutaciones con cookie, CORS restringido, TLS y cabeceras de no-caché en datos privados.
 - Webhook: firma validada antes de interpretar payload; límites razonables sin bloquear indebidamente entrega genuina.

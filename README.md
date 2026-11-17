@@ -58,33 +58,37 @@ El recorrido de arriba usa la captura manual de $150.00 en el simulador local.
     <td align="center" width="50%">
       <img src="docs/readme/acceso.png" width="240" alt="Pantalla de acceso con correo y contraseña">
       <br><strong>Acceso</strong>
-      <br>La cuenta llega configurada. No hay registro público.
+      <br>Correo y contraseña. También puedes crear un comercio.
     </td>
     <td align="center" width="50%">
+      <img src="docs/readme/registro.png" width="240" alt="Pantalla para crear un comercio con nombre, correo y contraseña">
+      <br><strong>Crear comercio</strong>
+      <br>Nombre, correo y contraseña. Entras de inmediato.
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
       <img src="docs/readme/confirmar.png" width="240" alt="Confirmación del importe en $150.00 antes de generar el QR">
       <br><strong>Confirmación</strong>
       <br>La cifra se ve grande y se confirma a mano.
     </td>
-  </tr>
-  <tr>
     <td align="center">
       <img src="docs/readme/cobro.png" width="240" alt="Cobro CoDi en espera, con QR de prueba, referencia y tiempo restante">
       <br><strong>Cobro</strong>
       <br>El código, la referencia y el tiempo que queda.
     </td>
+  </tr>
+  <tr>
     <td align="center">
       <img src="docs/readme/ventas.png" width="240" alt="Ventas con el total del día y el historial de movimientos">
       <br><strong>Ventas</strong>
       <br>Total del día e historial. Solo suma lo conciliado.
     </td>
-  </tr>
-  <tr>
     <td align="center">
       <img src="docs/readme/configuracion.png" width="240" alt="Configuración del comercio, la cuenta receptora y la preferencia de audio">
       <br><strong>Configuración</strong>
       <br>Comercio, cuenta receptora y preferencia de audio.
     </td>
-    <td></td>
   </tr>
 </table>
 
@@ -107,8 +111,12 @@ npm run dev                  # http://localhost:3000
 ```
 
 Acceso local: `demo@cobravoz.local` / `cobravoz-local-dev`. Solo abre el Supabase de
-esta máquina. El piloto no tiene registro público: el acceso de producción se
-comparte aparte y no se escribe en este repositorio.
+esta máquina. No publiques contraseñas de producción en este archivo.
+
+`/registro` crea un comercio con correo y contraseña, sin correo de verificación.
+Todos los comercios nuevos copian la misma cuenta Pey desde `PEY_BANK_ACCOUNT_ID`
+(solo servidor). En local, si esa variable falta, se usa la cuenta de prueba del
+seed. En producción, sin esa variable el registro no crea el comercio.
 
 ### Importes
 

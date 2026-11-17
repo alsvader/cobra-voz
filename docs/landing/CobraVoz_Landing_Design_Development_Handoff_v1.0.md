@@ -849,7 +849,7 @@ Puedes consultar nuevamente su estado. La app no marcará el cobro como pagado s
 Necesitas conexión para generar nuevos códigos QR. Si se interrumpe tu sesión, CobraVoz puede recuperar el estado de los cobros registrados cuando vuelvas a conectarte.
 
 **FAQ-06 — ¿Puedo registrar mi negocio?**  
-El MVP inicia como un piloto con un comercio y una cuenta receptora configurada. Todavía no cuenta con registro público para nuevos negocios.
+Sí. En Crear comercio dejas el nombre, el correo y una contraseña, y entras de inmediato. No enviamos un correo de verificación. La landing no agrega un botón de registro.
 
 ### B.7 CTA Final
 

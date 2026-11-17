@@ -25,6 +25,7 @@ describe("isPrivatePath", () => {
   it("deja públicas la landing y el acceso", () => {
     expect(isPrivatePath("/")).toBe(false);
     expect(isPrivatePath("/acceso")).toBe(false);
+    expect(isPrivatePath("/registro")).toBe(false);
     expect(isPrivatePath("/inicio-falso")).toBe(false);
   });
 });

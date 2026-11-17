@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/ui/app-shell";
@@ -62,7 +63,19 @@ async function AccesoContent({ searchParams }: { searchParams: SearchParams }) {
       ? LOGIN_REASON_MESSAGES[reason]
       : undefined;
 
-  return <LoginForm next={next} notice={notice} />;
+  return (
+    <div className="flex flex-col gap-5">
+      <LoginForm next={next} notice={notice} />
+      <p className="text-center text-base text-muted-foreground">
+        <Link
+          href={ROUTES.register}
+          className="font-semibold text-foreground underline"
+        >
+          Crear comercio
+        </Link>
+      </p>
+    </div>
+  );
 }
 
 function FormSkeleton() {

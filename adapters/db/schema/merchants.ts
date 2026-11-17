@@ -18,7 +18,7 @@ export const merchants = pgTable("merchants", {
   ...timestamps,
 }).enableRLS();
 
-/** Vincula `auth.users` con un comercio. Sin registro público (ADR-05). */
+/** Vincula `auth.users` con un comercio. El alta pública vive en `/registro`. */
 export const merchantUsers = pgTable(
   "merchant_users",
   {

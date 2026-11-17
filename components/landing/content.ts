@@ -1,7 +1,7 @@
 /**
  * Copy canónico de CobraVoz Landing Handoff v1.0 (Anexo B).
  * PEND-01 y PEND-02 siguen sin URL: no se inventa correo, WhatsApp ni aviso legal.
- * El acceso a la aplicación es el login existente (`/acceso`), sin registro público.
+ * La landing no muestra un botón de registro. El alta está en `/registro`.
  */
 
 import { ROUTES } from "@/lib/routes";
@@ -189,7 +189,7 @@ export const faq = {
       id: "faq-06",
       question: "¿Puedo registrar mi negocio?",
       answer:
-        "El MVP inicia como un piloto con un comercio y una cuenta receptora configurada. Todavía no cuenta con registro público para nuevos negocios.",
+        "Sí. En Crear comercio dejas el nombre, el correo y una contraseña, y entras de inmediato. No enviamos un correo de verificación.",
     },
   ],
 } as const;
