@@ -5,8 +5,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmAmountScreen } from "@/components/charge/confirm-amount-screen";
 import { requireMerchantContext } from "@/modules/identity/guards";
-import { parseCentsParam } from "@/modules/charges/amount";
-import { spokenTranscriptParam, parseSpokenAmount } from "@/modules/voice/parse-amount";
 import { ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = {
@@ -14,19 +12,14 @@ export const metadata: Metadata = {
   description: "Revisa el importe antes de generar el cobro.",
 };
 
-type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
-
 /**
  * P02 — Confirmación del importe. Sin barra inferior (UX §2).
  * `?centavos=15050` precarga un importe ya conocido (p. ej. de voz) y `?frase=`
  * muestra lo que se escuchó. Sin un importe válido, abre la captura manual
- * vacía. El valor se vuelve a validar aquí: nunca se confía en lo que trae la URL.
+ * vacía. El valor lo lee la pantalla desde la URL actual: la ruta puede
+ * quedar montada y no debe conservar el cobro anterior.
  */
-export default function ConfirmarImportePage({
-  searchParams,
-}: {
-  searchParams: SearchParams;
-}) {
+export default function ConfirmarImportePage() {
   return (
     <AppShell
       header={
@@ -38,41 +31,16 @@ export default function ConfirmarImportePage({
       }
     >
       <Suspense fallback={<ConfirmSkeleton />}>
-        <ConfirmContent searchParams={searchParams} />
+        <ConfirmContent />
       </Suspense>
     </AppShell>
   );
 }
 
-async function ConfirmContent({
-  searchParams,
-}: {
-  searchParams: SearchParams;
-}) {
+async function ConfirmContent() {
   // Autoriza la pantalla con la sesión real, no solo con el chequeo del proxy.
   await requireMerchantContext();
-
-  const params = await searchParams;
-  const raw = Array.isArray(params.centavos)
-    ? params.centavos[0]
-    : params.centavos;
-
-  const initialCents = parseCentsParam(raw);
-  const frase = Array.isArray(params.frase) ? params.frase[0] : params.frase;
-  const phrase = spokenTranscriptParam(frase);
-  const parsed = phrase ? parseSpokenAmount(phrase) : null;
-  const transcript =
-    initialCents !== null && parsed?.ok && parsed.cents === initialCents
-      ? phrase
-      : null;
-
-  return (
-    <ConfirmAmountScreen
-      key={`${initialCents ?? "manual"}:${transcript ?? ""}`}
-      initialCents={initialCents}
-      transcript={transcript ?? undefined}
-    />
-  );
+  return <ConfirmAmountScreen />;
 }
 
 function ConfirmSkeleton() {

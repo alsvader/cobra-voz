@@ -5,8 +5,10 @@ import { VoiceCapture } from "@/components/charge/voice-capture";
 import { VOICE_COPY } from "@/modules/voice/messages";
 
 const push = vi.fn();
+const search = vi.hoisted(() => ({ value: "" }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(search.value),
 }));
 
 class FakeRecorder extends EventTarget {
@@ -110,14 +112,22 @@ describe("VoiceCapture", () => {
 
 describe("P02 con frase de voz", () => {
   it("muestra lo escuchado y volver a hablar regresa a Inicio", () => {
-    render(
-      <ConfirmAmountScreen
-        initialCents={15_000}
-        transcript="ciento cincuenta"
-      />,
-    );
+    search.value = "centavos=15000&frase=ciento+cincuenta";
+    render(<ConfirmAmountScreen />);
     expect(screen.getByText(/Escuchamos/)).toHaveTextContent("ciento cincuenta");
     fireEvent.click(screen.getByRole("button", { name: "Volver a hablar" }));
     expect(push).toHaveBeenCalledWith("/inicio");
+  });
+
+  it("al quitar centavos de la URL, el importe anterior desaparece", () => {
+    search.value = "centavos=1302";
+    const view = render(<ConfirmAmountScreen />);
+    expect(screen.getByText("$13.02")).toBeInTheDocument();
+
+    search.value = "";
+    view.rerender(<ConfirmAmountScreen />);
+
+    expect(screen.queryByText("$13.02")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Importe a cobrar \(MXN\)/)).toHaveValue("");
   });
 });

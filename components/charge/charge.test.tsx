@@ -178,6 +178,33 @@ describe("AmountConfirmation — importe precargado", () => {
     expect(screen.getByText(/ciento cincuenta pesos/)).toBeInTheDocument();
   });
 
+  it("al volver sin importe en la URL, no conserva el cobro anterior", () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const { rerender } = render(
+      <AmountConfirmation
+        initialCents={1302}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    expect(screen.getByText("$13.02")).toBeInTheDocument();
+
+    rerender(
+      <AmountConfirmation
+        initialCents={null}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+
+    expect(screen.queryByText("$13.02")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Importe a cobrar \(MXN\)/)).toHaveValue("");
+    expect(
+      screen.getByRole("button", { name: "Confirmar importe" }),
+    ).toBeDisabled();
+  });
+
   it("«Corregir importe» abre el campo con el valor actual y pide confirmar de nuevo", async () => {
     const { onConfirm, user } = setup({ initialCents: 15050 });
     await user.click(screen.getByRole("button", { name: "Corregir importe" }));

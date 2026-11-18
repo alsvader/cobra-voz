@@ -1,12 +1,17 @@
 "use client";
 
 import { useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AmountConfirmation,
   type ConfirmResult,
 } from "@/components/charge/amount-confirmation";
+import { parseCentsParam } from "@/modules/charges/amount";
 import { newIdempotencyKey, submitCharge } from "@/modules/charges/client";
+import {
+  parseSpokenAmount,
+  spokenTranscriptParam,
+} from "@/modules/voice/parse-amount";
 import { ROUTES, chargePath, loginUrl } from "@/lib/routes";
 
 /**
@@ -20,14 +25,17 @@ import { ROUTES, chargePath, loginUrl } from "@/lib/routes";
  * Se navega con `replace`: «atrás» desde P03 no vuelve a un P02 ya confirmado.
  * Este componente nunca dibuja un QR ni anuncia un resultado de pago.
  */
-export function ConfirmAmountScreen({
-  initialCents,
-  transcript,
-}: {
-  initialCents: number | null;
-  transcript?: string;
-}) {
+export function ConfirmAmountScreen() {
   const router = useRouter();
+  const search = useSearchParams();
+  // La URL manda. La ruta puede reaparecer con el importe de un cobro ya cerrado.
+  const initialCents = parseCentsParam(search.get("centavos"));
+  const phrase = spokenTranscriptParam(search.get("frase") ?? undefined);
+  const parsed = phrase ? parseSpokenAmount(phrase) : null;
+  const transcript =
+    initialCents !== null && parsed?.ok && parsed.cents === initialCents
+      ? phrase
+      : null;
   const intention = useRef<{ key: string; cents: number } | null>(null);
 
   async function handleConfirm(cents: number): Promise<ConfirmResult> {
@@ -59,8 +67,9 @@ export function ConfirmAmountScreen({
 
   return (
     <AmountConfirmation
+      key={`${initialCents ?? "manual"}:${transcript ?? ""}`}
       initialCents={initialCents}
-      transcript={transcript}
+      transcript={transcript ?? undefined}
       onRetryVoice={
         transcript ? () => router.push(ROUTES.app) : undefined
       }

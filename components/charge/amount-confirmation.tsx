@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { AmountDisplay } from "@/components/charge/amount-display";
@@ -58,6 +58,16 @@ export function AmountConfirmation({
   const [failure, setFailure] = useState<string | null>(null);
   // Candado síncrono: dos clics seguidos no pueden disparar dos confirmaciones.
   const inFlight = useRef(false);
+
+  // cacheComponents oculta la ruta sin desmontarla. Al volver a verla, el
+  // importe tiene que salir de la visita actual, no del cobro anterior.
+  useLayoutEffect(() => {
+    setEditing(initialCents === null);
+    setDraft(initialCents === null ? "" : centsToInputValue(initialCents));
+    setPhase("idle");
+    setFailure(null);
+    inFlight.current = false;
+  }, [initialCents, transcript]);
 
   const parsed = parseAmountToCents(draft);
   const cents = editing ? (parsed.ok ? parsed.cents : null) : initialCents;
