@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { announceVerifiedPayment } from "@/adapters/speech/announce";
+import {
+  announceVerifiedPayment,
+  primePaymentSpeech,
+} from "@/adapters/speech/announce";
 import { ChargeView } from "@/components/charge/charge-view";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { chargePath, loginUrl } from "@/lib/routes";
@@ -80,6 +83,7 @@ export function ChargeScreen({ initialCharge, serverTime }: ChargeScreenProps) {
   }, []);
 
   const consult = useCallback(async () => {
+    primePaymentSpeech();
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
     const startedAt = epoch.current;

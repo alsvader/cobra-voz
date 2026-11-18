@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { AmountDisplay } from "@/components/charge/amount-display";
 import { AmountInput } from "@/components/charge/amount-input";
+import { primePaymentSpeech } from "@/adapters/speech/announce";
 import {
   AMOUNT_ERROR_MESSAGES,
   centsToInputValue,
@@ -71,6 +72,8 @@ export function AmountConfirmation({
       : undefined;
 
   async function confirm() {
+    // Antes del await: en iPhone solo este turno puede abrir el audio.
+    primePaymentSpeech();
     if (inFlight.current || cents === null) return;
     inFlight.current = true;
     setFailure(null);

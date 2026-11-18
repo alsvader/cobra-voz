@@ -13,6 +13,7 @@ const router = { replace, push: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/adapters/speech/announce", () => ({
   announceVerifiedPayment: vi.fn(),
+  primePaymentSpeech: vi.fn(),
 }));
 
 const T0 = Date.parse("2026-11-15T12:00:00Z");

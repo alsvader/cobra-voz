@@ -1,4 +1,17 @@
+import { networkInterfaces } from "node:os";
 import type { NextConfig } from "next";
+
+/** IPv4 de esta máquina. En desarrollo, Next solo entrega su JavaScript a estos orígenes. */
+function lanDevOrigins(): string[] {
+  const origins = new Set<string>();
+  for (const entries of Object.values(networkInterfaces())) {
+    for (const entry of entries ?? []) {
+      if (entry.internal || entry.family !== "IPv4") continue;
+      origins.add(entry.address);
+    }
+  }
+  return [...origins];
+}
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -12,6 +25,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: lanDevOrigins(),
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {
