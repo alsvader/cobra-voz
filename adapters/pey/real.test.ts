@@ -308,7 +308,55 @@ describe("cliente Pey real", () => {
       ...request,
       phoneNumber: "5512345678",
     });
-    expect(outcome.status).toBe("uncertain");
+    expect(outcome).toMatchObject({
+      status: "uncertain",
+      reason: expect.stringContaining("codiId: ausente"),
+    });
+    if (outcome.status === "uncertain") {
+      expect(outcome.reason).not.toContain("5512345678");
+    }
+  });
+
+  it("conserva un folio de 20 dígitos que Pey mandó como número", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      now: () => now,
+      fetch: async () =>
+        new Response(
+          '{"transactionId":"01J5KXYZ1234567890ABCD","codiId":12345678901234567890}',
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    });
+    const outcome = await pey.createCodiPush({
+      ...request,
+      phoneNumber: "5512345678",
+    });
+    expect(outcome).toMatchObject({
+      status: "created",
+      transactionId: "01J5KXYZ1234567890ABCD",
+      codiId: "12345678901234567890",
+    });
+  });
+
+  it("acepta el folio con espacios y el id cuando no viene transactionId", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      now: () => now,
+      fetch: async () =>
+        jsonResponse({
+          id: "01J5KXYZ1234567890ABCD",
+          codiId: "1234 5678 9012 3456 7890",
+        }),
+    });
+    const outcome = await pey.createCodiPush({
+      ...request,
+      phoneNumber: "5512345678",
+    });
+    expect(outcome).toMatchObject({
+      status: "created",
+      transactionId: "01J5KXYZ1234567890ABCD",
+      codiId: "12345678901234567890",
+    });
   });
 
   it("consulta la notificación por su transactionId", async () => {

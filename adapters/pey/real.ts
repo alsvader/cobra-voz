@@ -137,14 +137,10 @@ export function createRealPeyAdapter(options: RealPeyOptions): PeyAdapter {
         };
       }
 
-      const created = parsePushCreated(await readJson(response), input, now());
-      if (!created) {
-        return {
-          status: "uncertain",
-          reason: "La respuesta de Pey no trae una notificación utilizable.",
-        };
-      }
-      return created;
+      // El folio de 20 dígitos a veces llega como número. JSON.parse lo
+      // redondea; hay que leerlo del texto crudo.
+      const raw = await response.text();
+      return parsePushCreated(parseJson(raw), raw, input, now());
     },
 
     async queryCodiQrPayments(peyQrId): Promise<QueryQrPaymentsOutcome> {
@@ -304,27 +300,82 @@ function buildPushBody(request: CreatePushRequest): string | null {
 
 function parsePushCreated(
   json: unknown,
+  raw: string,
   request: CreatePushRequest,
   now: Date,
-): CreatePushOutcome | null {
-  if (!json || typeof json !== "object") return null;
-  const row = json as Record<string, unknown>;
-  if (
-    typeof row.transactionId !== "string" ||
-    !row.transactionId.trim() ||
-    row.transactionId.length > 128
-  ) {
-    return null;
+): CreatePushOutcome {
+  if (!json || typeof json !== "object" || Array.isArray(json)) {
+    return {
+      status: "uncertain",
+      reason: "La respuesta de Pey no trae una notificación utilizable.",
+    };
   }
-  if (typeof row.codiId !== "string" || !/^[0-9]{20}$/.test(row.codiId)) {
-    return null;
+  const row = json as Record<string, unknown>;
+  const errorType = peyErrorType(json);
+  if (errorType) {
+    return {
+      status: "uncertain",
+      reason: `Pey no confirmó el envío de la notificación (HTTP 200, ${errorType}).`,
+    };
+  }
+
+  const transactionId = readTransactionId(row);
+  const codiId = readCodiId(row, raw);
+  if (!transactionId || !codiId) {
+    return {
+      status: "uncertain",
+      reason: `La respuesta de Pey no trae una notificación utilizable (${pushShape(row)}).`,
+    };
   }
   return {
     status: "created",
-    transactionId: row.transactionId.trim(),
-    codiId: row.codiId,
+    transactionId,
+    codiId,
     expiresAt: new Date(now.getTime() + request.expirationSeconds * 1000),
   };
+}
+
+function readTransactionId(row: Record<string, unknown>): string | null {
+  const value = row.transactionId ?? row.id;
+  if (typeof value !== "string") return null;
+  const id = value.trim();
+  if (!id || id.length > 128) return null;
+  return id;
+}
+
+/** Folio Banxico: 20 dígitos. Acepta texto, espacios o un número en el JSON crudo. */
+function readCodiId(row: Record<string, unknown>, raw: string): string | null {
+  const value = row.codiId ?? row.codi_id;
+  if (typeof value === "string") {
+    const digits = value.replace(/[\s-]/g, "");
+    if (/^[0-9]{20}$/.test(digits)) return digits;
+    return null;
+  }
+  const match = raw.match(
+    /"(?:codiId|codi_id)"\s*:\s*(?:"([0-9]{20})"|([0-9]{20})(?![0-9]))/,
+  );
+  return match?.[1] ?? match?.[2] ?? null;
+}
+
+/** Claves y tipos, nunca el folio, el celular ni el mensaje libre de Pey. */
+function pushShape(row: Record<string, unknown>): string {
+  const keys = Object.keys(row).slice(0, 12).join(",") || "ninguna";
+  return `claves: ${keys}; transactionId: ${valueKind(row.transactionId ?? row.id)}; codiId: ${valueKind(row.codiId ?? row.codi_id)}`;
+}
+
+function valueKind(value: unknown): string {
+  if (value == null) return "ausente";
+  if (typeof value === "string") return `texto(${value.trim().length})`;
+  if (typeof value === "number") return "numero";
+  return typeof value;
+}
+
+function parseJson(raw: string): unknown {
+  try {
+    return raw ? JSON.parse(raw) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function parsePushTransaction(
