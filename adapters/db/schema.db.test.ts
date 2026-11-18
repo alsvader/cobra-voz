@@ -365,6 +365,7 @@ describe("seguridad de acceso por la API de Supabase", () => {
     "merchant_preferences",
     "charges",
     "codi_qrs",
+    "codi_notifications",
     "payments",
     "payment_events",
     "payment_incidents",

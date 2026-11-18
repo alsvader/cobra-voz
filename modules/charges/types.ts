@@ -19,6 +19,10 @@ export type ChargeDto = {
   amountCents: number;
   currency: "MXN";
   status: ChargeStatus;
+  /** `qr` muestra un código. `pn` envió el aviso a un celular. */
+  collectionMethod: "qr" | "pn";
+  /** Últimos 4 dígitos cuando el cobro es por notificación. */
+  phoneLast4: string | null;
   createdAt: string;
   expiresAt: string | null;
   closedAt: string | null;

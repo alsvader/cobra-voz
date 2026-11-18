@@ -82,9 +82,17 @@ export function ChargeView({
     case "created":
       return (
         <Stack>
-          <Notice tone="info" label="Generando QR">
-            Estamos generando el código. Todavía no hay nada que cobrar: no
-            cierres esta pantalla.
+          <Notice
+            tone="info"
+            label={
+              charge.collectionMethod === "pn"
+                ? "Enviando aviso"
+                : "Generando QR"
+            }
+          >
+            {charge.collectionMethod === "pn"
+              ? "Estamos enviando el aviso. Todavía no hay nada que cobrar: no cierres esta pantalla."
+              : "Estamos generando el código. Todavía no hay nada que cobrar: no cierres esta pantalla."}
           </Notice>
           {heading}
           {referenceLine}
@@ -103,13 +111,15 @@ export function ChargeView({
       return (
         <Stack>
           <Notice tone="warning" label="Esperando pago">
-            {qr
-              ? "Pídele a tu cliente que escanee el código con su app bancaria. Solo marcaremos «Pagado» cuando el banco lo confirme."
-              : "No encontramos el código de este cobro. No cobres con él; vuelve a Inicio y crea un cobro nuevo."}
+            {charge.collectionMethod === "pn"
+              ? `Le enviamos el cobro al celular${charge.phoneLast4 ? ` terminado en ${charge.phoneLast4}` : ""}. Tu cliente lo acepta en su app bancaria. Solo marcaremos «Pagado» cuando el banco lo confirme.`
+              : qr
+                ? "Pídele a tu cliente que escanee el código con su app bancaria. Solo marcaremos «Pagado» cuando el banco lo confirme."
+                : "No encontramos el código de este cobro. No cobres con él; vuelve a Inicio y crea un cobro nuevo."}
           </Notice>
           <Unavailable connection={connection} />
           {heading}
-          {qr ? (
+          {qr && charge.collectionMethod !== "pn" ? (
             <CoDiQrCard
               payload={qr.payload}
               simulated={qr.simulated}
@@ -200,10 +210,17 @@ export function ChargeView({
     case "qr_uncertain":
       return (
         <Stack>
-          <Notice tone="incident" label="No pudimos confirmar el QR">
-            No sabemos si se generó el código de {amount}. Guarda la referencia.
-            No se creó ningún cobro adicional y no repetiremos la solicitud por
-            tu cuenta.
+          <Notice
+            tone="incident"
+            label={
+              charge.collectionMethod === "pn"
+                ? "No pudimos confirmar el aviso"
+                : "No pudimos confirmar el QR"
+            }
+          >
+            {charge.collectionMethod === "pn"
+              ? `No sabemos si se envió el aviso de ${amount}. Guarda la referencia. No se creó ningún cobro adicional y no repetiremos la solicitud por tu cuenta.`
+              : `No sabemos si se generó el código de ${amount}. Guarda la referencia. No se creó ningún cobro adicional y no repetiremos la solicitud por tu cuenta.`}
           </Notice>
           {heading}
           {referenceLine}

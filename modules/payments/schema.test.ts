@@ -41,6 +41,28 @@ describe("parsePeyPaymentNotice", () => {
     expect(parsed.notice.paidAt).toEqual(new Date(1790724818 * 1000));
   });
 
+  it("acepta el aviso de notificación sin codiQrId", () => {
+    const parsed = parsePeyPaymentNotice({
+      type: "codi.pn.payment_received",
+      transactionId: "01M3QR5E7XHXMNZDEPFH3JAWS0",
+      amount: 0.01,
+      bankAccountId: "01JBAVWE4NS5TGXHWGMX3KH23Q",
+      concept: "(dev) Order 45",
+      datePaid: 1790724758,
+      metadata: {
+        externalMetadata: { chargeId: "5f0d9f0e-8c3a-4e0e-9d7e-0c1f7c8c2a11" },
+      },
+      numRef: "4567",
+    });
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.notice.kind !== "pn") return;
+    expect(parsed.notice.transactionId).toBe("01M3QR5E7XHXMNZDEPFH3JAWS0");
+    expect(parsed.notice.amountCents).toBe(1);
+    expect(parsed.notice.numRef).toBe(4567);
+    expect(parsed.notice.chargeId).toBe("5f0d9f0e-8c3a-4e0e-9d7e-0c1f7c8c2a11");
+  });
+
   it("rechaza un tipo distinto, un importe vacío y centavos de más", () => {
     expect(parsePeyPaymentNotice({ ...notice, type: "otro" }).ok).toBe(false);
     expect(parsePeyPaymentNotice({ ...notice, amount: "0" }).ok).toBe(false);

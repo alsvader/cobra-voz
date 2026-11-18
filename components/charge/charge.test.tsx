@@ -111,7 +111,11 @@ describe("AmountConfirmation — captura manual desde cero", () => {
     await user.click(confirmButton());
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    expect(onConfirm).toHaveBeenCalledWith(29);
+    expect(onConfirm).toHaveBeenCalledWith({
+      cents: 29,
+      method: "qr",
+      phoneNumber: null,
+    });
   });
 
   it("Enter en el campo equivale al CTA explícito", async () => {
@@ -120,7 +124,11 @@ describe("AmountConfirmation — captura manual desde cero", () => {
       screen.getByLabelText(/Importe a cobrar \(MXN\)/),
       "80{Enter}",
     );
-    expect(onConfirm).toHaveBeenCalledExactlyOnceWith(8000);
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith({
+      cents: 8000,
+      method: "qr",
+      phoneNumber: null,
+    });
   });
 
   it.each([
@@ -219,7 +227,11 @@ describe("AmountConfirmation — importe precargado", () => {
     expect(onConfirm).not.toHaveBeenCalled();
 
     await user.click(confirmButton());
-    expect(onConfirm).toHaveBeenCalledExactlyOnceWith(20000);
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith({
+      cents: 20000,
+      method: "qr",
+      phoneNumber: null,
+    });
   });
 
   it("al corregir, un valor inválido bloquea la confirmación", async () => {
@@ -249,6 +261,92 @@ describe("AmountConfirmation — importe precargado", () => {
     );
     await user.click(screen.getByRole("button", { name: "Volver a hablar" }));
     expect(onRetryVoice).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AmountConfirmation — forma de cobro", () => {
+  it("el código QR es la opción inicial y no pide celular", () => {
+    setup({ initialCents: 15050 });
+    expect(screen.getByRole("radio", { name: "Código QR" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(
+      screen.queryByLabelText("Celular del cliente"),
+    ).not.toBeInTheDocument();
+    expect(confirmButton()).toBeEnabled();
+  });
+
+  it("la notificación pide un celular de 10 dígitos antes de confirmar", async () => {
+    const { onConfirm, user } = setup({ initialCents: 15050 });
+    await user.click(screen.getByRole("radio", { name: "Notificación" }));
+
+    expect(screen.getByLabelText("Celular del cliente")).toBeInTheDocument();
+    expect(confirmButton()).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Celular del cliente"), "551234567");
+    expect(confirmButton()).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Celular del cliente"), "8");
+    expect(confirmButton()).toBeEnabled();
+    await user.click(confirmButton());
+
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith({
+      cents: 15050,
+      method: "pn",
+      phoneNumber: "5512345678",
+    });
+  });
+
+  it("en iPhone espera a que cierre el teclado antes de enviar la notificación", async () => {
+    const spy = vi
+      .spyOn(navigator, "userAgent", "get")
+      .mockReturnValue(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+      );
+    try {
+      const { onConfirm, user } = setup({ initialCents: 15050 });
+      await user.click(screen.getByRole("radio", { name: "Notificación" }));
+      await user.type(
+        screen.getByLabelText("Celular del cliente"),
+        "5512345678",
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Confirmar importe" }),
+      );
+
+      expect(onConfirm).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("button", { name: "Enviando aviso…" }),
+      ).toBeDisabled();
+
+      await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1), {
+        timeout: 1000,
+      });
+      expect(onConfirm).toHaveBeenCalledWith({
+        cents: 15050,
+        method: "pn",
+        phoneNumber: "5512345678",
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("acepta espacios y guiones, y rechaza la lada", async () => {
+    const { user } = setup({ initialCents: 15050 });
+    await user.click(screen.getByRole("radio", { name: "Notificación" }));
+    const field = screen.getByLabelText("Celular del cliente");
+
+    await user.type(field, "55 1234-5678");
+    expect(confirmButton()).toBeEnabled();
+
+    await user.clear(field);
+    await user.type(field, "525512345678");
+    expect(
+      screen.getByText("Escribe los 10 dígitos del celular, sin lada."),
+    ).toBeInTheDocument();
+    expect(confirmButton()).toBeDisabled();
   });
 });
 

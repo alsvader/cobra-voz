@@ -1,6 +1,21 @@
-import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "@/adapters/db/create-db";
-import { charges, codiQrs, merchants } from "@/adapters/db/schema";
+import {
+  charges,
+  codiNotifications,
+  codiQrs,
+  merchants,
+} from "@/adapters/db/schema";
 import type { PeyAdapter, QueriedPayment } from "@/adapters/pey/types";
 import { MAX_AMOUNT_CENTS } from "@/modules/charges/amount";
 import {
@@ -88,7 +103,7 @@ async function stampAttempt(db: Database, chargeId: string, now: Date) {
  * Consulta a Pey un cobro del comercio y aplica la MISMA lógica que el
  * webhook (Architecture §8 y §9).
  *
- * - Sin `pey_qr_id` no se llama al proveedor y no se inventa un QR.
+ * - Sin `pey_qr_id` ni `transactionId` no se llama al proveedor.
  * - Un cobro ya `paid` no se vuelve a consultar.
  * - Si Pey no responde, el cobro no cambia a pagado.
  * - La misma transacción, llegue por webhook o por esta consulta, queda
@@ -116,7 +131,7 @@ export async function reconcileCharge(
     };
   }
 
-  if (!settled.peyQrId) {
+  if (!settled.peyQrId && !settled.peyTransactionId) {
     return { ok: false, error: "not_reconcilable", charge: settled.charge };
   }
 
@@ -132,7 +147,11 @@ export async function reconcileCharge(
     }
   }
 
-  const queried = await deps.pey.queryCodiQrPayments(settled.peyQrId);
+  if (settled.peyTransactionId && !settled.peyQrId) {
+    return reconcilePush(deps, merchantId, chargeId, settled, now, options);
+  }
+
+  const queried = await deps.pey.queryCodiQrPayments(settled.peyQrId!);
   if (!options.respectInterval) {
     await stampAttempt(deps.db, chargeId, now);
   }
@@ -149,6 +168,84 @@ export async function reconcileCharge(
   }
 
   return applyPayments(deps, merchantId, chargeId, settled, queried.payments);
+}
+
+async function reconcilePush(
+  deps: ReconcileDeps,
+  merchantId: string,
+  chargeId: string,
+  settled: SettledCharge,
+  now: Date,
+  options: { respectInterval?: boolean },
+): Promise<ReconcileChargeResult> {
+  const transactionId = settled.peyTransactionId;
+  if (!transactionId) {
+    return { ok: false, error: "not_reconcilable", charge: settled.charge };
+  }
+
+  const queried = await deps.pey.queryCodiPushPayment(transactionId);
+  if (!options.respectInterval) {
+    await stampAttempt(deps.db, chargeId, now);
+  }
+  if (queried.status === "unavailable") {
+    console.warn(
+      JSON.stringify({
+        event: "reconciliation_unavailable",
+        chargeId,
+        reason: queried.reason,
+      }),
+    );
+    return { ok: false, error: "unavailable", charge: settled.charge };
+  }
+  if (!queried.payment) {
+    const reloaded = await loadSettledCharge(deps, merchantId, chargeId);
+    return {
+      ok: true,
+      charge: reloaded?.charge ?? settled.charge,
+      outcome: "unchanged",
+      queried: true,
+    };
+  }
+
+  const [known] = await deps.db
+    .select({
+      numRef: codiNotifications.numRef,
+      bankAccountId: merchants.peyBankAccountId,
+    })
+    .from(codiNotifications)
+    .innerJoin(charges, eq(charges.id, codiNotifications.chargeId))
+    .innerJoin(merchants, eq(merchants.id, charges.merchantId))
+    .where(eq(codiNotifications.peyTransactionId, transactionId))
+    .limit(1);
+  if (!known) {
+    return { ok: false, error: "not_reconcilable", charge: settled.charge };
+  }
+
+  const payment = queried.payment;
+  await recordPeyPayment(
+    deps,
+    queryEventId(payment.transactionId.trim()),
+    {
+      kind: "pn",
+      transactionId: payment.transactionId.trim(),
+      amountCents: payment.amountCents,
+      numRef: payment.numRef ?? known.numRef,
+      bankAccountId: payment.bankAccountId?.trim() || known.bankAccountId,
+      paidAt: payment.paidAt,
+      chargeId: queried.chargeId,
+    },
+    { evidenceSource: "provider_query" },
+  );
+
+  const reloaded = await loadSettledCharge(deps, merchantId, chargeId);
+  const charge = reloaded?.charge ?? settled.charge;
+  const outcome =
+    charge.status === "paid"
+      ? "paid"
+      : charge.status === "incident"
+        ? "incident"
+        : "unchanged";
+  return { ok: true, charge, outcome, queried: true };
 }
 
 async function claimAttempt(
@@ -205,12 +302,14 @@ async function applyPayments(
       deps,
       queryEventId(payment.transactionId.trim()),
       {
+        kind: "qr",
         transactionId: payment.transactionId.trim(),
         codiQrId: peyQrId,
         amountCents: payment.amountCents,
         numRef: payment.numRef ?? known.numRef,
         bankAccountId: payment.bankAccountId?.trim() || known.bankAccountId,
         paidAt: payment.paidAt,
+        chargeId: null,
       },
       { evidenceSource: "provider_query" },
     );
@@ -237,8 +336,9 @@ export type ReconcilePendingResult = {
 };
 
 /**
- * Pasada del cron: cobros con QR conocido que siguen abiertos a un pago
- * (en espera, vencidos o cerrados en local dentro de 24 h, e incidencias).
+ * Pasada del cron: cobros con QR o notificación conocidos que siguen abiertos
+ * a un pago (en espera, vencidos o cerrados en local dentro de 24 h, e
+ * incidencias).
  * Cada cobro se consulta como máximo una vez por intervalo.
  * `merchantId` acota la pasada a un comercio; el cron no lo envía.
  */
@@ -257,9 +357,11 @@ export async function reconcilePending(
       merchantId: charges.merchantId,
     })
     .from(charges)
-    .innerJoin(codiQrs, eq(codiQrs.chargeId, charges.id))
+    .leftJoin(codiQrs, eq(codiQrs.chargeId, charges.id))
+    .leftJoin(codiNotifications, eq(codiNotifications.chargeId, charges.id))
     .where(
       and(
+        or(isNotNull(codiQrs.id), isNotNull(codiNotifications.id)),
         options.merchantId
           ? eq(charges.merchantId, options.merchantId)
           : undefined,

@@ -44,6 +44,37 @@ describe("createChargeSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("acepta una notificación con celular de 10 dígitos", () => {
+    const result = createChargeSchema.safeParse({
+      amountCents: 100,
+      idempotencyKey: key,
+      method: "pn",
+      phoneNumber: "55 1234-5678",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.phoneNumber).toBe("5512345678");
+    expect(result.data.method).toBe("pn");
+  });
+
+  it("rechaza la lada y un QR que trae celular", () => {
+    expect(
+      createChargeSchema.safeParse({
+        amountCents: 100,
+        idempotencyKey: key,
+        method: "pn",
+        phoneNumber: "+52 55 1234 5678",
+      }).success,
+    ).toBe(false);
+    expect(
+      createChargeSchema.safeParse({
+        amountCents: 100,
+        idempotencyKey: key,
+        phoneNumber: "5512345678",
+      }).success,
+    ).toBe(false);
+  });
+
   it("rechaza cuerpos que no son objeto", () => {
     for (const body of [undefined, null, "x", 5, []]) {
       expect(createChargeSchema.safeParse(body).success).toBe(false);

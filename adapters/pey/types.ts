@@ -56,6 +56,41 @@ export type QueryQrPaymentsOutcome =
   /** Timeout o error del proveedor. No es «no hubo pago» y no acredita nada. */
   | { status: "unavailable"; reason: string };
 
+export type CreatePushRequest = {
+  chargeId: string;
+  amountCents: number;
+  concept: string;
+  numRef: number;
+  expirationSeconds: number;
+  bankAccountId: string;
+  /** Celular mexicano de 10 dígitos, sin lada. */
+  phoneNumber: string;
+};
+
+export type CreatePushOutcome =
+  | {
+      status: "created";
+      transactionId: string;
+      /** Folio de 20 dígitos asignado por Banxico. */
+      codiId: string;
+      expiresAt: Date;
+    }
+  /** Timeout o respuesta sin identificadores. No se reintenta a ciegas. */
+  | { status: "uncertain"; reason: string };
+
+/**
+ * Consulta de `GET /transaction/:id` para una notificación ya creada.
+ * `payment` en null significa que Pey respondió y el pago sigue pendiente.
+ * `chargeId` sale de `metadata.externalMetadata` cuando Pey lo devuelve.
+ */
+export type QueryPushPaymentOutcome =
+  | {
+      status: "ok";
+      payment: QueriedPayment | null;
+      chargeId: string | null;
+    }
+  | { status: "unavailable"; reason: string };
+
 export interface PeyAdapter {
   /** Identifica la implementación (logs y rotulado de QR de prueba). */
   readonly kind: "mock" | "real";
@@ -66,4 +101,11 @@ export interface PeyAdapter {
    * ya devolvió. Sin id no hay nada que consultar.
    */
   queryCodiQrPayments(peyQrId: string): Promise<QueryQrPaymentsOutcome>;
+  /** Una única llamada a `POST /codi/pn`. Sin reintentos internos. */
+  createCodiPush(request: CreatePushRequest): Promise<CreatePushOutcome>;
+  /**
+   * `GET /transaction/:id` del `transactionId` que Pey devolvió al crear la
+   * notificación. Sin ese id no hay nada que consultar.
+   */
+  queryCodiPushPayment(transactionId: string): Promise<QueryPushPaymentOutcome>;
 }

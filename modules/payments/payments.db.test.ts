@@ -3,6 +3,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
   charges,
+  codiNotifications,
   codiQrs,
   merchants,
   paymentEvents,
@@ -50,11 +51,13 @@ async function waitingCharge(merchantId: string, account: string) {
 function notice(
   qr: { peyQrId: string; numRef: number },
   account: string,
-  overrides: Partial<PeyPaymentNotice> = {},
-): PeyPaymentNotice {
+  overrides: Partial<Extract<PeyPaymentNotice, { kind: "qr" }>> = {},
+): Extract<PeyPaymentNotice, { kind: "qr" }> {
   return {
+    kind: "qr",
     transactionId: `tx-${randomUUID()}`,
     codiQrId: qr.peyQrId,
+    chargeId: null,
     amountCents: 15050,
     numRef: qr.numRef,
     bankAccountId: account,
@@ -106,6 +109,21 @@ afterEach(async () => {
     if (qrIds.length > 0) {
       await db.delete(payments).where(inArray(payments.codiQrId, qrIds));
       await db.delete(codiQrs).where(inArray(codiQrs.id, qrIds));
+    }
+    const noteRows = await db
+      .select({ id: codiNotifications.id })
+      .from(codiNotifications)
+      .where(inArray(codiNotifications.chargeId, chargeIds));
+    if (noteRows.length > 0) {
+      await db.delete(payments).where(
+        inArray(
+          payments.codiNotificationId,
+          noteRows.map((row) => row.id),
+        ),
+      );
+      await db
+        .delete(codiNotifications)
+        .where(inArray(codiNotifications.chargeId, chargeIds));
     }
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
@@ -294,6 +312,8 @@ describe("recordPeyPayment", () => {
   it("un QR desconocido no crea cobro ni pago", async () => {
     const transactionId = `tx-${randomUUID()}`;
     const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "qr",
+      chargeId: null,
       transactionId,
       codiQrId: `qr-desconocido-${randomUUID()}`,
       amountCents: 15050,
@@ -336,5 +356,97 @@ describe("recordPeyPayment", () => {
       .from(charges)
       .where(inArray(charges.id, [expired.charge.id, closed.charge.id]));
     expect(rows.every((row) => row.status === "paid")).toBe(true);
+  });
+
+  it("un aviso de notificación que coincide deja el cobro pagado", async () => {
+    const merchant = await newMerchant();
+    const created = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      {
+        amountCents: 15050,
+        idempotencyKey: randomUUID(),
+        method: "pn",
+        phoneNumber: "5512345678",
+      },
+    );
+    if (!created.ok) throw new Error("setup");
+    const [note] = await db
+      .select()
+      .from(codiNotifications)
+      .where(eq(codiNotifications.chargeId, created.charge.id));
+
+    const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "pn",
+      transactionId: note.peyTransactionId,
+      amountCents: 1,
+      numRef: note.numRef,
+      bankAccountId: merchant.peyBankAccountId,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+      chargeId: created.charge.id,
+    });
+
+    expect(result).toEqual({ outcome: "paid", duplicate: false });
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, created.charge.id));
+    expect(row.status).toBe("paid");
+  });
+
+  it("un transactionId de notificación desconocido no crea un cobro", async () => {
+    const transactionId = `tx-${randomUUID()}`;
+    const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "pn",
+      transactionId,
+      amountCents: 1,
+      numRef: 1,
+      bankAccountId: "acct",
+      paidAt: new Date(),
+      chargeId: null,
+    });
+
+    expect(result.outcome).toBe("incident");
+    const paymentRows = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(eq(payments.providerTransactionId, transactionId));
+    expect(paymentRows).toHaveLength(0);
+  });
+
+  it("un chargeId distinto en la notificación queda como incidencia", async () => {
+    const merchant = await newMerchant();
+    const created = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      {
+        amountCents: 15050,
+        idempotencyKey: randomUUID(),
+        method: "pn",
+        phoneNumber: "5512345678",
+      },
+    );
+    if (!created.ok) throw new Error("setup");
+    const [note] = await db
+      .select()
+      .from(codiNotifications)
+      .where(eq(codiNotifications.chargeId, created.charge.id));
+
+    const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "pn",
+      transactionId: note.peyTransactionId,
+      amountCents: 1,
+      numRef: note.numRef,
+      bankAccountId: merchant.peyBankAccountId,
+      paidAt: new Date(),
+      chargeId: "00000000-0000-4000-8000-000000000099",
+    });
+
+    expect(result.outcome).toBe("incident");
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, created.charge.id));
+    expect(row.status).toBe("incident");
   });
 });

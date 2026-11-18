@@ -1,10 +1,13 @@
 import { pesosNumberToCents } from "@/modules/charges/amount";
 import { REAL_QR_AMOUNT_CENTS, centsToPeyAmountToken } from "./contract";
 import type {
+  CreatePushOutcome,
+  CreatePushRequest,
   CreateQrOutcome,
   CreateQrRequest,
   PeyAdapter,
   QueriedPayment,
+  QueryPushPaymentOutcome,
   QueryQrPaymentsOutcome,
 } from "./types";
 
@@ -105,6 +108,45 @@ export function createRealPeyAdapter(options: RealPeyOptions): PeyAdapter {
       return created;
     },
 
+    async createCodiPush(input): Promise<CreatePushOutcome> {
+      const body = buildPushBody(input);
+      if (!body) {
+        return {
+          status: "uncertain",
+          reason:
+            "La solicitud de la notificación no cumple el contrato de Pey.",
+        };
+      }
+
+      const response = await request(`${BASE_URL}/codi/pn`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (!response) {
+        return {
+          status: "uncertain",
+          reason: "Pey no respondió al enviar la notificación.",
+        };
+      }
+      if (response.status !== 200) {
+        const errorType = peyErrorType(await readJson(response));
+        return {
+          status: "uncertain",
+          reason: `Pey no confirmó el envío de la notificación (HTTP ${response.status}${errorType ? `, ${errorType}` : ""}).`,
+        };
+      }
+
+      const created = parsePushCreated(await readJson(response), input, now());
+      if (!created) {
+        return {
+          status: "uncertain",
+          reason: "La respuesta de Pey no trae una notificación utilizable.",
+        };
+      }
+      return created;
+    },
+
     async queryCodiQrPayments(peyQrId): Promise<QueryQrPaymentsOutcome> {
       const id = peyQrId.trim();
       if (!id || id.length > 128) {
@@ -167,6 +209,45 @@ export function createRealPeyAdapter(options: RealPeyOptions): PeyAdapter {
         reason: "La consulta de Pey no terminó la lista.",
       };
     },
+
+    async queryCodiPushPayment(
+      transactionId,
+    ): Promise<QueryPushPaymentOutcome> {
+      const id = transactionId.trim();
+      if (!id || id.length > 128) {
+        return {
+          status: "unavailable",
+          reason: "No hay una notificación de Pey que consultar.",
+        };
+      }
+
+      const response = await request(
+        `${BASE_URL}/transaction/${encodeURIComponent(id)}`,
+        { method: "GET" },
+      );
+      if (!response || !response.ok) {
+        return {
+          status: "unavailable",
+          reason: "Pey no confirmó la consulta de la notificación.",
+        };
+      }
+
+      const parsed = parsePushTransaction(await readJson(response), id);
+      if (!parsed) {
+        return {
+          status: "unavailable",
+          reason: "La consulta de la notificación no tiene la forma esperada.",
+        };
+      }
+      if (parsed === "pending") {
+        return { status: "ok", payment: null, chargeId: null };
+      }
+      return {
+        status: "ok",
+        payment: parsed.payment,
+        chargeId: parsed.chargeId,
+      };
+    },
   };
 }
 
@@ -199,6 +280,81 @@ function buildCreateBody(request: CreateQrRequest): string | null {
   });
   const amount = centsToPeyAmountToken(REAL_QR_AMOUNT_CENTS);
   return `{"amount":${amount},${fields.slice(1)}`;
+}
+
+function buildPushBody(request: CreatePushRequest): string | null {
+  if (!/^[0-9]{10}$/.test(request.phoneNumber)) return null;
+  const shared = buildCreateBody({
+    chargeId: request.chargeId,
+    amountCents: request.amountCents,
+    concept: request.concept,
+    numRef: request.numRef,
+    expirationSeconds: request.expirationSeconds,
+    bankAccountId: request.bankAccountId,
+  });
+  if (!shared) return null;
+  const fields = JSON.parse(shared) as Record<string, unknown>;
+  delete fields.amount;
+  delete fields.generateImage;
+  fields.phoneNumber = request.phoneNumber;
+  const amount = centsToPeyAmountToken(REAL_QR_AMOUNT_CENTS);
+  const rest = JSON.stringify(fields);
+  return `{"amount":${amount},${rest.slice(1)}`;
+}
+
+function parsePushCreated(
+  json: unknown,
+  request: CreatePushRequest,
+  now: Date,
+): CreatePushOutcome | null {
+  if (!json || typeof json !== "object") return null;
+  const row = json as Record<string, unknown>;
+  if (
+    typeof row.transactionId !== "string" ||
+    !row.transactionId.trim() ||
+    row.transactionId.length > 128
+  ) {
+    return null;
+  }
+  if (typeof row.codiId !== "string" || !/^[0-9]{20}$/.test(row.codiId)) {
+    return null;
+  }
+  return {
+    status: "created",
+    transactionId: row.transactionId.trim(),
+    codiId: row.codiId,
+    expiresAt: new Date(now.getTime() + request.expirationSeconds * 1000),
+  };
+}
+
+function parsePushTransaction(
+  json: unknown,
+  transactionId: string,
+): "pending" | { payment: QueriedPayment; chargeId: string | null } | null {
+  if (!json || typeof json !== "object") return null;
+  const row = json as Record<string, unknown>;
+  if (row.payableType != null && row.payableType !== "API_CODI_PN") return null;
+  if (row.paymentMethod != null && row.paymentMethod !== "CODI") return null;
+  if (row.currency != null && row.currency !== "MXN") return null;
+  if (row.status === "PENDING") return "pending";
+  if (row.status !== "PAID") return null;
+  if (row.payableType !== "API_CODI_PN") return null;
+
+  const listed = readPayment({ ...row, id: transactionId });
+  if (listed === "bad" || !listed) return null;
+  return { payment: listed, chargeId: readExternalChargeId(row.metadata) };
+}
+
+function readExternalChargeId(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const external = (metadata as { externalMetadata?: unknown })
+    .externalMetadata;
+  if (!external || typeof external !== "object") return null;
+  const chargeId = (external as { chargeId?: unknown }).chargeId;
+  if (typeof chargeId !== "string") return null;
+  const trimmed = chargeId.trim();
+  if (!trimmed || trimmed.length > 128) return null;
+  return trimmed;
 }
 
 function parseCreated(

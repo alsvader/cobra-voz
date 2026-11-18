@@ -30,6 +30,8 @@ function chargeWith(
     amountCents: 15050,
     currency: "MXN",
     status,
+    collectionMethod: "qr",
+    phoneLast4: null,
     createdAt: new Date(T0).toISOString(),
     expiresAt: waiting ? new Date(T0 + 600_000).toISOString() : null,
     closedAt: null,
@@ -77,6 +79,23 @@ describe("ChargeView — variantes por estado persistido", () => {
     expect(screen.queryByTestId("codi-qr")).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("esperando una notificación: muestra los últimos 4 dígitos y no el QR", () => {
+    view(
+      chargeWith("waiting_payment", {
+        collectionMethod: "pn",
+        phoneLast4: "5678",
+        qr: null,
+      }),
+      125_000,
+    );
+
+    expect(screen.getByText(/terminado en 5678/)).toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Consultar nuevamente" }),
+    ).toBeEnabled();
   });
 
   it("esperando pago: QR rotulado de prueba, importe, referencia y tiempo restante", () => {

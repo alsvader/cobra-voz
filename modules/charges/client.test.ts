@@ -17,6 +17,8 @@ const charge: ChargeDto = {
   amountCents: 15050,
   currency: "MXN",
   status: "waiting_payment",
+  collectionMethod: "qr",
+  phoneLast4: null,
   createdAt: "2026-11-15T12:00:00.000Z",
   expiresAt: "2026-11-15T12:10:00.000Z",
   closedAt: null,
@@ -54,7 +56,7 @@ describe("submitCharge", () => {
     ];
     expect(url).toBe("/api/charges");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body as string)).toEqual(input);
+    expect(JSON.parse(init.body as string)).toEqual({ ...input, method: "qr" });
     expect(init.body as string).not.toMatch(/merchant/i);
   });
 
@@ -74,7 +76,7 @@ describe("submitCharge", () => {
 
   it.each([
     [400, /no es válido/],
-    [409, /otro importe/],
+    [409, /otros datos/],
     [503, /no está disponible/],
     [500, /No pudimos crear el cobro/],
     [418, /No pudimos crear el cobro/],

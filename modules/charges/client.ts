@@ -23,7 +23,7 @@ const MESSAGES = {
     "No pudimos confirmar si el cobro se creó. Revisa tu conexión y vuelve a intentarlo: no se duplicará.",
   unavailable: "El cobro con QR no está disponible por ahora.",
   conflict:
-    "Este cobro ya se había enviado con otro importe. Cancela y empieza uno nuevo.",
+    "Este cobro ya se había enviado con otros datos. Cancela y empieza uno nuevo.",
   invalid: "El importe no es válido. Corrígelo e inténtalo de nuevo.",
   generic: "No pudimos crear el cobro. Inténtalo de nuevo en un momento.",
 } as const;
@@ -35,15 +35,33 @@ const MESSAGES = {
  * de la sesión.
  */
 export async function submitCharge(
-  input: { amountCents: number; idempotencyKey: string },
+  input: {
+    amountCents: number;
+    idempotencyKey: string;
+    method?: "qr" | "pn";
+    phoneNumber?: string | null;
+  },
   fetchImpl: typeof fetch = fetch,
 ): Promise<SubmitChargeResult> {
+  const payload: {
+    amountCents: number;
+    idempotencyKey: string;
+    method: "qr" | "pn";
+    phoneNumber?: string;
+  } = {
+    amountCents: input.amountCents,
+    idempotencyKey: input.idempotencyKey,
+    method: input.method ?? "qr",
+  };
+  if (payload.method === "pn" && input.phoneNumber) {
+    payload.phoneNumber = input.phoneNumber;
+  }
   let response: Response;
   try {
     response = await fetchImpl("/api/charges", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+      body: JSON.stringify(payload),
     });
   } catch {
     return { kind: "error", message: MESSAGES.network };

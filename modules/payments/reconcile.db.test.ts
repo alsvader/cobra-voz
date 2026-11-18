@@ -3,6 +3,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
   charges,
+  codiNotifications,
   codiQrs,
   merchants,
   paymentEvents,
@@ -11,6 +12,7 @@ import {
 } from "@/adapters/db/schema";
 import { createTestDb } from "@/adapters/db/testing";
 import {
+  MOCK_QUERY_PAID_AMOUNT_CENTS,
   MOCK_QUERY_UNAVAILABLE_AMOUNT_CENTS,
   createMockPeyAdapter,
   type MockPeyAdapter,
@@ -101,6 +103,22 @@ afterEach(async () => {
       await db.delete(payments).where(inArray(payments.codiQrId, qrIds));
       await db.delete(codiQrs).where(inArray(codiQrs.id, qrIds));
     }
+    const noteRows = await db
+      .select({ id: codiNotifications.id })
+      .from(codiNotifications)
+      .where(inArray(codiNotifications.chargeId, chargeIds));
+    const noteIds = noteRows.map((row) => row.id);
+    if (noteIds.length > 0) {
+      await db
+        .delete(paymentEvents)
+        .where(inArray(paymentEvents.codiNotificationId, noteIds));
+      await db
+        .delete(payments)
+        .where(inArray(payments.codiNotificationId, noteIds));
+      await db
+        .delete(codiNotifications)
+        .where(inArray(codiNotifications.id, noteIds));
+    }
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
   await db.delete(merchants).where(inArray(merchants.id, merchantIds));
@@ -140,6 +158,8 @@ describe("reconcileCharge", () => {
     const { charge, qr } = await openCharge(pey, merchant.id);
     const payment = matchingPayment(qr, merchant.peyBankAccountId);
     await recordPeyPayment({ db }, `msg_${randomUUID()}`, {
+      kind: "qr",
+      chargeId: null,
       ...payment,
       codiQrId: qr.peyQrId,
     });
@@ -165,6 +185,8 @@ describe("reconcileCharge", () => {
 
     await reconcileCharge({ db, pey }, merchant.id, charge.id);
     await recordPeyPayment({ db }, `msg_${randomUUID()}`, {
+      kind: "qr",
+      chargeId: null,
       ...payment,
       codiQrId: qr.peyQrId,
     });
@@ -301,7 +323,10 @@ describe("reconcilePending", () => {
       }),
     );
 
-    const run = await reconcilePending({ db, pey }, { merchantId: merchant.id });
+    const run = await reconcilePending(
+      { db, pey },
+      { merchantId: merchant.id },
+    );
 
     expect(run.paid).toBe(1);
     expect(pey.queryCalls).toEqual([recent.qr.peyQrId]);
@@ -323,7 +348,10 @@ describe("reconcilePending", () => {
     const pey = createMockPeyAdapter();
     await openCharge(pey, merchant.id);
 
-    const first = await reconcilePending({ db, pey }, { merchantId: merchant.id });
+    const first = await reconcilePending(
+      { db, pey },
+      { merchantId: merchant.id },
+    );
     const second = await reconcilePending(
       { db, pey },
       { merchantId: merchant.id },
@@ -342,9 +370,37 @@ describe("reconcilePending", () => {
       idempotencyKey: randomUUID(),
     });
 
-    const run = await reconcilePending({ db, pey }, { merchantId: merchant.id });
+    const run = await reconcilePending(
+      { db, pey },
+      { merchantId: merchant.id },
+    );
 
     expect(run.examined).toBe(0);
     expect(pey.queryCalls).toHaveLength(0);
+  });
+
+  it("la pasada consulta una notificación y la marca pagada", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const created = await createCharge({ db, pey }, merchant.id, {
+      amountCents: MOCK_QUERY_PAID_AMOUNT_CENTS,
+      idempotencyKey: randomUUID(),
+      method: "pn",
+      phoneNumber: "5512345678",
+    });
+    if (!created.ok) throw new Error("setup");
+
+    const run = await reconcilePending(
+      { db, pey },
+      { merchantId: merchant.id },
+    );
+
+    expect(run).toMatchObject({ examined: 1, paid: 1 });
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, created.charge.id));
+    expect(row.status).toBe("paid");
+    expect(pey.queryCalls[0]).toMatch(/^mock-pn-/);
   });
 });

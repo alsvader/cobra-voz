@@ -5,10 +5,13 @@ import type { PeyAdapter } from "./types";
 export { REAL_QR_AMOUNT_CENTS } from "./contract";
 
 export type {
+  CreatePushOutcome,
+  CreatePushRequest,
   CreateQrOutcome,
   CreateQrRequest,
   PeyAdapter,
   QueriedPayment,
+  QueryPushPaymentOutcome,
   QueryQrPaymentsOutcome,
 } from "./types";
 export { isSimulatedQr } from "./mock";

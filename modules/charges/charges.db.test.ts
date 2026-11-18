@@ -3,6 +3,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
   charges,
+  codiNotifications,
   codiQrs,
   merchants,
   paymentIncidents,
@@ -57,6 +58,18 @@ function adapterReturning(
         reason: "Esta prueba no consulta pagos.",
       };
     },
+    async createCodiPush() {
+      return {
+        status: "uncertain",
+        reason: "Esta prueba no envía notificaciones.",
+      };
+    },
+    async queryCodiPushPayment() {
+      return {
+        status: "unavailable",
+        reason: "Esta prueba no consulta notificaciones.",
+      };
+    },
   };
   return { adapter, calls };
 }
@@ -92,6 +105,21 @@ afterEach(async () => {
       );
     }
     await db.delete(codiQrs).where(inArray(codiQrs.chargeId, chargeIds));
+    const noteRows = await db
+      .select({ id: codiNotifications.id })
+      .from(codiNotifications)
+      .where(inArray(codiNotifications.chargeId, chargeIds));
+    if (noteRows.length > 0) {
+      await db.delete(payments).where(
+        inArray(
+          payments.codiNotificationId,
+          noteRows.map((row) => row.id),
+        ),
+      );
+      await db
+        .delete(codiNotifications)
+        .where(inArray(codiNotifications.chargeId, chargeIds));
+    }
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
   await db.delete(merchants).where(inArray(merchants.id, merchantIds));
@@ -957,5 +985,97 @@ describe("findResumableCharge", () => {
 
     expect(pending?.status).toBe("qr_uncertain");
     expect(pending?.reference).toBe(created.charge.reference);
+  });
+});
+
+describe("createCharge — notificación", () => {
+  const phone = "5512345678";
+
+  it("guarda el aviso sin el teléfono completo y sin QR", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const result = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15050,
+      idempotencyKey: newKey(),
+      method: "pn",
+      phoneNumber: "55 1234-5678",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.charge).toMatchObject({
+      status: "waiting_payment",
+      collectionMethod: "pn",
+      phoneLast4: "5678",
+      qr: null,
+    });
+    expect(JSON.stringify(result.charge)).not.toContain(phone);
+    expect(pey.pushCalls).toHaveLength(1);
+    expect(pey.pushCalls[0].phoneNumber).toBe(phone);
+    expect(pey.calls).toHaveLength(0);
+
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, result.charge.id));
+    expect(row.phoneHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(row.phoneHash).not.toBe(phone);
+
+    const notes = await db
+      .select()
+      .from(codiNotifications)
+      .where(eq(codiNotifications.chargeId, result.charge.id));
+    expect(notes).toHaveLength(1);
+    expect(notes[0].peyTransactionId).toMatch(/^mock-pn-/);
+    expect(notes[0].codiId).toMatch(/^[0-9]{20}$/);
+  });
+
+  it("repetir la misma intención no envía otro aviso; otro celular sí choca", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const idempotencyKey = newKey();
+    const input = {
+      amountCents: 15050,
+      idempotencyKey,
+      method: "pn" as const,
+      phoneNumber: phone,
+    };
+    const first = await createCharge({ db, pey }, merchant.id, input);
+    const second = await createCharge({ db, pey }, merchant.id, input);
+    const conflict = await createCharge({ db, pey }, merchant.id, {
+      ...input,
+      phoneNumber: "5587654321",
+    });
+
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(second.replayed).toBe(true);
+    expect(second.charge.id).toBe(first.charge.id);
+    expect(pey.pushCalls).toHaveLength(1);
+    expect(conflict).toEqual({ ok: false, error: "idempotency_conflict" });
+  });
+
+  it("un timeout no reintenta el aviso", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const input = {
+      amountCents: 1301,
+      idempotencyKey: newKey(),
+      method: "pn" as const,
+      phoneNumber: phone,
+    };
+    const first = await createCharge({ db, pey }, merchant.id, input);
+    const retry = await createCharge({ db, pey }, merchant.id, input);
+
+    expect(first.ok && retry.ok).toBe(true);
+    if (!first.ok || !retry.ok) return;
+    expect(first.charge.status).toBe("qr_uncertain");
+    expect(retry.replayed).toBe(true);
+    expect(pey.pushCalls).toHaveLength(1);
+    const notes = await db
+      .select()
+      .from(codiNotifications)
+      .where(eq(codiNotifications.chargeId, first.charge.id));
+    expect(notes).toHaveLength(0);
   });
 });

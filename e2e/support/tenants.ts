@@ -8,6 +8,7 @@ import { eq, inArray } from "drizzle-orm";
 import { createDb } from "../../adapters/db/create-db";
 import {
   charges,
+  codiNotifications,
   codiQrs,
   merchantPreferences,
   merchants,
@@ -163,6 +164,22 @@ export async function deleteTenant(tenant: Tenant): Promise<void> {
         );
       }
       await db.delete(codiQrs).where(inArray(codiQrs.chargeId, chargeIds));
+      const noteRows = await db
+        .select({ id: codiNotifications.id })
+        .from(codiNotifications)
+        .where(inArray(codiNotifications.chargeId, chargeIds));
+      const noteIds = noteRows.map((row) => row.id);
+      if (noteIds.length > 0) {
+        await db
+          .delete(paymentEvents)
+          .where(inArray(paymentEvents.codiNotificationId, noteIds));
+        await db
+          .delete(payments)
+          .where(inArray(payments.codiNotificationId, noteIds));
+        await db
+          .delete(codiNotifications)
+          .where(inArray(codiNotifications.id, noteIds));
+      }
       await db.delete(charges).where(inArray(charges.id, chargeIds));
     }
     await db

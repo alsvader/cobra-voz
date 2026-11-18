@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AmountConfirmation,
+  type ConfirmCharge,
   type ConfirmResult,
 } from "@/components/charge/amount-confirmation";
 import { parseCentsParam } from "@/modules/charges/amount";
@@ -36,16 +37,32 @@ export function ConfirmAmountScreen() {
     initialCents !== null && parsed?.ok && parsed.cents === initialCents
       ? phrase
       : null;
-  const intention = useRef<{ key: string; cents: number } | null>(null);
+  const intention = useRef<{
+    key: string;
+    cents: number;
+    method: ConfirmCharge["method"];
+    phone: string | null;
+  } | null>(null);
 
-  async function handleConfirm(cents: number): Promise<ConfirmResult> {
-    if (intention.current?.cents !== cents) {
-      intention.current = { key: newIdempotencyKey(), cents };
+  async function handleConfirm(charge: ConfirmCharge): Promise<ConfirmResult> {
+    if (
+      intention.current?.cents !== charge.cents ||
+      intention.current.method !== charge.method ||
+      intention.current.phone !== charge.phoneNumber
+    ) {
+      intention.current = {
+        key: newIdempotencyKey(),
+        cents: charge.cents,
+        method: charge.method,
+        phone: charge.phoneNumber,
+      };
     }
 
     const result = await submitCharge({
-      amountCents: cents,
+      amountCents: charge.cents,
       idempotencyKey: intention.current.key,
+      method: charge.method,
+      phoneNumber: charge.phoneNumber,
     });
 
     if (result.kind === "unauthenticated") {
@@ -70,9 +87,7 @@ export function ConfirmAmountScreen() {
       key={`${initialCents ?? "manual"}:${transcript ?? ""}`}
       initialCents={initialCents}
       transcript={transcript ?? undefined}
-      onRetryVoice={
-        transcript ? () => router.push(ROUTES.app) : undefined
-      }
+      onRetryVoice={transcript ? () => router.push(ROUTES.app) : undefined}
       onConfirm={handleConfirm}
       onCancel={() => router.push(ROUTES.app)}
     />

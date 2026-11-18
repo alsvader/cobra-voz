@@ -2,12 +2,19 @@ import { and, desc, eq, gt, inArray, lte } from "drizzle-orm";
 import type { Database } from "@/adapters/db/create-db";
 import {
   charges,
+  codiNotifications,
   codiQrs,
   paymentIncidents,
   merchants,
 } from "@/adapters/db/schema";
 import { isSimulatedQr } from "@/adapters/pey/mock";
-import type { CreateQrOutcome, PeyAdapter } from "@/adapters/pey/types";
+import type {
+  CreatePushOutcome,
+  CreateQrOutcome,
+  PeyAdapter,
+} from "@/adapters/pey/types";
+import { phoneHash } from "./phone-hash";
+import { normalizeMxPhone, phoneLast4 } from "./phone";
 import {
   QR_EXPIRATION_SECONDS,
   chargeReference,
@@ -29,6 +36,13 @@ export type CreateChargeResult =
   /** La misma clave de idempotencia se usó con otro importe. */
   | { ok: false; error: "idempotency_conflict" | "merchant_not_found" };
 
+type ChargeRequest = {
+  amountCents: number;
+  idempotencyKey: string;
+  method?: CreateChargeInput["method"];
+  phoneNumber?: string | null;
+};
+
 /**
  * Un cobro que sigue en `created` pasado este tiempo quedó sin resolver (p. ej.
  * el proceso cayó entre persistir y llamar a Pey). No se sabe si Pey creó el
@@ -48,6 +62,8 @@ function toDto(charge: ChargeRow, qr: QrRow | null): ChargeDto {
     amountCents: charge.amountCents,
     currency: "MXN",
     status: charge.status,
+    collectionMethod: charge.collectionMethod === "pn" ? "pn" : "qr",
+    phoneLast4: charge.phoneLast4,
     createdAt: charge.createdAt.toISOString(),
     expiresAt: charge.expiresAt?.toISOString() ?? null,
     closedAt: charge.closedAt?.toISOString() ?? null,
@@ -67,9 +83,14 @@ async function loadCharge(
   where: ReturnType<typeof eq>,
 ) {
   const [row] = await db
-    .select({ charge: charges, qr: codiQrs })
+    .select({
+      charge: charges,
+      qr: codiQrs,
+      notification: codiNotifications,
+    })
     .from(charges)
     .leftJoin(codiQrs, eq(codiQrs.chargeId, charges.id))
+    .leftJoin(codiNotifications, eq(codiNotifications.chargeId, charges.id))
     .where(and(eq(charges.merchantId, merchantId), where))
     .limit(1);
   return row ?? null;
@@ -134,7 +155,9 @@ async function settleCharge(
     await markUncertain(
       deps.db,
       charge.id,
-      "La solicitud de QR quedó sin resolver; no se sabe si Pey la creó.",
+      charge.collectionMethod === "pn"
+        ? "La solicitud de notificación quedó sin resolver; no se sabe si Pey la envió."
+        : "La solicitud de QR quedó sin resolver; no se sabe si Pey la creó.",
     );
   } else {
     await deps.db
@@ -159,12 +182,22 @@ async function pickNumRef(deps: ChargesDeps, now: Date): Promise<number> {
   const next = deps.nextNumRef ?? randomNumRef;
   for (let attempt = 0; attempt < MAX_NUM_REF_ATTEMPTS; attempt++) {
     const candidate = next();
-    const [inUse] = await deps.db
+    const [qrInUse] = await deps.db
       .select({ id: codiQrs.id })
       .from(codiQrs)
       .where(and(eq(codiQrs.numRef, candidate), gt(codiQrs.expiresAt, now)))
       .limit(1);
-    if (!inUse) return candidate;
+    const [pushInUse] = await deps.db
+      .select({ id: codiNotifications.id })
+      .from(codiNotifications)
+      .where(
+        and(
+          eq(codiNotifications.numRef, candidate),
+          gt(codiNotifications.expiresAt, now),
+        ),
+      )
+      .limit(1);
+    if (!qrInUse && !pushInUse) return candidate;
   }
   throw new Error("No se pudo asignar una referencia numérica libre.");
 }
@@ -187,27 +220,56 @@ function validateCreated(
   return null;
 }
 
+function validatePush(
+  outcome: Extract<CreatePushOutcome, { status: "created" }>,
+  now: Date,
+): string | null {
+  if (!outcome.transactionId?.trim() || outcome.transactionId.length > 128) {
+    return "Pey no devolvió el identificador de la notificación.";
+  }
+  if (!/^[0-9]{20}$/.test(outcome.codiId ?? "")) {
+    return "Pey no devolvió el folio de la notificación.";
+  }
+  if (
+    !(outcome.expiresAt instanceof Date) ||
+    Number.isNaN(outcome.expiresAt.getTime()) ||
+    outcome.expiresAt.getTime() <= now.getTime()
+  ) {
+    return "Pey devolvió una vigencia no válida.";
+  }
+  return null;
+}
+
 /**
- * Crea (o recupera) la intención de cobro y solicita el QR (Architecture §7).
+ * Crea (o recupera) la intención de cobro y solicita el QR o la notificación.
  *
  * Garantías:
  *  - La intención se persiste ANTES de llamar a Pey.
  *  - `(merchant_id, idempotency_key)` es único en BD: ante peticiones
  *    simultáneas o repetidas solo UNA ejecuta la llamada a Pey; el resto recibe
  *    el mismo cobro (`replayed`).
- *  - Se hace una sola llamada a `POST /codi/qr` por intención, sin reintentos.
- *    Si el resultado es incierto, el cobro queda en `qr_uncertain` con una
- *    incidencia abierta y NO se crea un QR nuevo automáticamente.
- *  - El estado `waiting_payment` y la fila `codi_qrs` se escriben juntos, en una
- *    transacción, y solo con un QR real y válido.
+ *  - Se hace una sola llamada a Pey por intención, sin reintentos. Si el
+ *    resultado es incierto, el cobro queda en `qr_uncertain` con una incidencia
+ *    abierta y NO se pide otro instrumento automáticamente.
+ *  - `waiting_payment` y la fila del QR o de la notificación se escriben juntos,
+ *    y solo con una respuesta real y válida.
  */
 export async function createCharge(
   deps: ChargesDeps,
   merchantId: string,
-  input: CreateChargeInput,
+  input: ChargeRequest,
 ): Promise<CreateChargeResult> {
   const { db, pey } = deps;
   const now = (deps.now ?? (() => new Date()))();
+  const method = input.method ?? "qr";
+  const phone =
+    method === "pn" ? normalizeMxPhone(input.phoneNumber ?? "") : null;
+  if (method === "pn" && !phone) {
+    throw new Error(
+      "El cobro por notificación requiere un celular de 10 dígitos.",
+    );
+  }
+  const hashedPhone = phone ? phoneHash(phone) : null;
 
   const [merchant] = await db
     .select({ peyBankAccountId: merchants.peyBankAccountId })
@@ -222,6 +284,9 @@ export async function createCharge(
       merchantId,
       amountCents: input.amountCents,
       idempotencyKey: input.idempotencyKey,
+      collectionMethod: method,
+      phoneHash: hashedPhone,
+      phoneLast4: phone ? phoneLast4(phone) : null,
     })
     .onConflictDoNothing({
       target: [charges.merchantId, charges.idempotencyKey],
@@ -239,7 +304,13 @@ export async function createCharge(
       // Imposible salvo borrado concurrente; se trata como error interno.
       throw new Error("Cobro idempotente no encontrado tras el conflicto.");
     }
-    if (existing.charge.amountCents !== input.amountCents) {
+    const existingMethod =
+      existing.charge.collectionMethod === "pn" ? "pn" : "qr";
+    if (
+      existing.charge.amountCents !== input.amountCents ||
+      existingMethod !== method ||
+      (method === "pn" && existing.charge.phoneHash !== hashedPhone)
+    ) {
       return { ok: false, error: "idempotency_conflict" };
     }
     const settled = await settleCharge(deps, merchantId, existing);
@@ -254,16 +325,20 @@ export async function createCharge(
   const numRef = await pickNumRef(deps, now);
   const reference = chargeReference(inserted.id);
 
-  let outcome: CreateQrOutcome;
+  let outcome: CreateQrOutcome | CreatePushOutcome;
   try {
-    outcome = await pey.createCodiQr({
+    const request = {
       chargeId: inserted.id,
       amountCents: inserted.amountCents,
       concept: `Cobro ${reference}`,
       numRef,
       expirationSeconds: QR_EXPIRATION_SECONDS,
       bankAccountId: merchant.peyBankAccountId,
-    });
+    };
+    outcome =
+      method === "pn"
+        ? await pey.createCodiPush({ ...request, phoneNumber: phone! })
+        : await pey.createCodiQr(request);
   } catch {
     // Un adaptador que lanza se trata igual que un timeout: incierto.
     outcome = {
@@ -273,7 +348,10 @@ export async function createCharge(
   }
 
   if (outcome.status === "created") {
-    const invalid = validateCreated(outcome, now);
+    const invalid =
+      "qrString" in outcome
+        ? validateCreated(outcome, now)
+        : validatePush(outcome, now);
     if (invalid) {
       outcome = { status: "uncertain", reason: invalid };
     }
@@ -295,13 +373,24 @@ export async function createCharge(
 
   try {
     await db.transaction(async (tx) => {
-      await tx.insert(codiQrs).values({
-        chargeId: inserted.id,
-        peyQrId: outcome.peyQrId,
-        numRef,
-        qrPayload: outcome.qrString,
-        expiresAt: outcome.expiresAt,
-      });
+      if ("qrString" in outcome) {
+        await tx.insert(codiQrs).values({
+          chargeId: inserted.id,
+          peyQrId: outcome.peyQrId,
+          numRef,
+          qrPayload: outcome.qrString,
+          expiresAt: outcome.expiresAt,
+        });
+      } else {
+        await tx.insert(codiNotifications).values({
+          chargeId: inserted.id,
+          peyTransactionId: outcome.transactionId,
+          codiId: outcome.codiId,
+          numRef,
+          phoneLast4: phoneLast4(phone!),
+          expiresAt: outcome.expiresAt,
+        });
+      }
       await tx
         .update(charges)
         .set({
@@ -312,12 +401,14 @@ export async function createCharge(
         .where(and(eq(charges.id, inserted.id), eq(charges.status, "created")));
     });
   } catch {
-    // Pey pudo haber creado el QR pero no se pudo guardar: no se expone y se
-    // trata como incierto (nunca se muestra un QR sin persistir).
+    // Pey pudo haber creado el instrumento pero no se pudo guardar: no se
+    // expone y se trata como incierto.
     await markUncertain(
       db,
       inserted.id,
-      "Pey creó el QR pero no se pudo persistir en CobraVoz.",
+      method === "pn"
+        ? "Pey envió la notificación pero no se pudo persistir en CobraVoz."
+        : "Pey creó el QR pero no se pudo persistir en CobraVoz.",
     );
   }
 
@@ -332,8 +423,10 @@ export async function createCharge(
 /** Cobro del comercio indicado, o `null` (también si es de otro comercio). */
 export type SettledCharge = {
   charge: ChargeDto;
-  /** Id externo de Pey. `null` si ese QR nunca se confirmó: no se consulta. */
+  /** Id del QR en Pey. `null` si ese QR nunca se confirmó o el cobro es push. */
   peyQrId: string | null;
+  /** `transactionId` de la notificación. `null` si nunca se confirmó o es QR. */
+  peyTransactionId: string | null;
 };
 
 /**
@@ -351,6 +444,7 @@ export async function loadSettledCharge(
   return {
     charge: toDto(settled.charge, settled.qr),
     peyQrId: settled.qr?.peyQrId ?? null,
+    peyTransactionId: settled.notification?.peyTransactionId ?? null,
   };
 }
 
@@ -378,9 +472,10 @@ export async function findResumableCharge(
   merchantId: string,
 ): Promise<ChargeDto | null> {
   const rows = await deps.db
-    .select({ charge: charges, qr: codiQrs })
+    .select({ charge: charges, qr: codiQrs, notification: codiNotifications })
     .from(charges)
     .leftJoin(codiQrs, eq(codiQrs.chargeId, charges.id))
+    .leftJoin(codiNotifications, eq(codiNotifications.chargeId, charges.id))
     .where(
       and(
         eq(charges.merchantId, merchantId),

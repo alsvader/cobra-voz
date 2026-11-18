@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "@/adapters/db/create-db";
 import {
   charges,
+  codiNotifications,
   codiQrs,
   merchants,
   paymentEvents,
@@ -23,7 +24,7 @@ const PAYABLE_STATUSES = [
 
 const MISMATCH_LABEL = {
   amount_mismatch: "El importe recibido no coincide con el cobro.",
-  reference_mismatch: "La referencia numérica no coincide con el QR.",
+  reference_mismatch: "La referencia numérica no coincide con el cobro.",
   account_mismatch: "La cuenta receptora no coincide con la del comercio.",
 } as const;
 
@@ -68,9 +69,13 @@ export async function recordPeyPayment(
   const now = (deps.now ?? (() => new Date()))();
   const evidenceSource = options.evidenceSource ?? "webhook";
   const eventType =
-    evidenceSource === "provider_query"
-      ? "codi.qr.payment_query"
-      : "codi.qr.payment_received";
+    notice.kind === "pn"
+      ? evidenceSource === "provider_query"
+        ? "codi.pn.payment_query"
+        : "codi.pn.payment_received"
+      : evidenceSource === "provider_query"
+        ? "codi.qr.payment_query"
+        : "codi.qr.payment_received";
 
   return deps.db.transaction(async (tx) => {
     const [inserted] = await tx
@@ -82,7 +87,7 @@ export async function recordPeyPayment(
         validationStatus: "verified",
         processingStatus: "pending",
         providerTransactionId: notice.transactionId,
-        providerQrId: notice.codiQrId,
+        providerQrId: notice.kind === "qr" ? notice.codiQrId : null,
         receivedAt: now,
       })
       .onConflictDoNothing({
@@ -104,38 +109,30 @@ export async function recordPeyPayment(
       }
     }
 
-    const [qr] = await tx
-      .select({
-        id: codiQrs.id,
-        numRef: codiQrs.numRef,
-        chargeId: charges.id,
-        chargeStatus: charges.status,
-        amountCents: charges.amountCents,
-        bankAccountId: merchants.peyBankAccountId,
-      })
-      .from(codiQrs)
-      .innerJoin(charges, eq(charges.id, codiQrs.chargeId))
-      .innerJoin(merchants, eq(merchants.id, charges.merchantId))
-      .where(eq(codiQrs.peyQrId, notice.codiQrId))
-      .limit(1);
-
-    if (!qr) {
+    const instrument = await findInstrument(tx, notice);
+    if (!instrument) {
       await finishIncident(tx, {
         eventId,
         now,
-        type: "unknown_qr",
-        reason: "Pey avisó un pago de un QR que CobraVoz no tiene registrado.",
+        type: notice.kind === "qr" ? "unknown_qr" : "other",
+        reason:
+          notice.kind === "qr"
+            ? "Pey avisó un pago de un QR que CobraVoz no tiene registrado."
+            : "Pey avisó un pago de una notificación que CobraVoz no tiene registrada.",
       });
       return { outcome: "incident", duplicate: false };
     }
 
-    const mismatches = mismatchesOf(notice, qr);
-    const reconciled = mismatches.length === 0;
+    const mismatches = mismatchesOf(notice, instrument);
+    const chargeMismatch =
+      notice.chargeId != null && notice.chargeId !== instrument.chargeId;
+    const reconciled = mismatches.length === 0 && !chargeMismatch;
 
     const [payment] = await tx
       .insert(payments)
       .values({
-        codiQrId: qr.id,
+        codiQrId: instrument.kind === "qr" ? instrument.id : null,
+        codiNotificationId: instrument.kind === "pn" ? instrument.id : null,
         provider: PROVIDER,
         providerTransactionId: notice.transactionId,
         amountCents: notice.amountCents,
@@ -165,7 +162,8 @@ export async function recordPeyPayment(
         .update(paymentEvents)
         .set({
           processingStatus: "ignored",
-          codiQrId: qr.id,
+          codiQrId: instrument.kind === "qr" ? instrument.id : null,
+          codiNotificationId: instrument.kind === "pn" ? instrument.id : null,
           processedAt: now,
           updatedAt: now,
         })
@@ -180,7 +178,8 @@ export async function recordPeyPayment(
       .update(paymentEvents)
       .set({
         processingStatus: reconciled ? "applied" : "incident",
-        codiQrId: qr.id,
+        codiQrId: instrument.kind === "qr" ? instrument.id : null,
+        codiNotificationId: instrument.kind === "pn" ? instrument.id : null,
         paymentId: payment.id,
         processedAt: now,
         updatedAt: now,
@@ -189,18 +188,23 @@ export async function recordPeyPayment(
 
     if (!reconciled) {
       await tx.insert(paymentIncidents).values({
-        chargeId: qr.chargeId,
+        chargeId: instrument.chargeId,
         paymentId: payment.id,
         paymentEventId: eventId,
         type: mismatches.length === 1 ? mismatches[0] : "other",
-        reason: mismatches.map((item) => MISMATCH_LABEL[item]).join(" "),
+        reason: [
+          ...mismatches.map((item) => MISMATCH_LABEL[item]),
+          ...(chargeMismatch
+            ? ["El identificador del cobro en el aviso no coincide."]
+            : []),
+        ].join(" "),
       });
       await tx
         .update(charges)
         .set({ status: "incident", updatedAt: now })
         .where(
           and(
-            eq(charges.id, qr.chargeId),
+            eq(charges.id, instrument.chargeId),
             inArray(charges.status, [
               "waiting_payment",
               "expired",
@@ -216,13 +220,59 @@ export async function recordPeyPayment(
       .set({ status: "paid", paidPaymentId: payment.id, updatedAt: now })
       .where(
         and(
-          eq(charges.id, qr.chargeId),
+          eq(charges.id, instrument.chargeId),
           inArray(charges.status, [...PAYABLE_STATUSES]),
         ),
       );
 
     return { outcome: "paid", duplicate: false };
   });
+}
+
+type Instrument = {
+  kind: "qr" | "pn";
+  id: string;
+  chargeId: string;
+  amountCents: number;
+  numRef: number;
+  bankAccountId: string;
+};
+
+async function findInstrument(
+  tx: Parameters<Parameters<Database["transaction"]>[0]>[0],
+  notice: PeyPaymentNotice,
+): Promise<Instrument | null> {
+  if (notice.kind === "qr") {
+    const [qr] = await tx
+      .select({
+        id: codiQrs.id,
+        numRef: codiQrs.numRef,
+        chargeId: charges.id,
+        amountCents: charges.amountCents,
+        bankAccountId: merchants.peyBankAccountId,
+      })
+      .from(codiQrs)
+      .innerJoin(charges, eq(charges.id, codiQrs.chargeId))
+      .innerJoin(merchants, eq(merchants.id, charges.merchantId))
+      .where(eq(codiQrs.peyQrId, notice.codiQrId))
+      .limit(1);
+    return qr ? { kind: "qr", ...qr } : null;
+  }
+
+  const [notification] = await tx
+    .select({
+      id: codiNotifications.id,
+      numRef: codiNotifications.numRef,
+      chargeId: charges.id,
+      amountCents: charges.amountCents,
+      bankAccountId: merchants.peyBankAccountId,
+    })
+    .from(codiNotifications)
+    .innerJoin(charges, eq(charges.id, codiNotifications.chargeId))
+    .innerJoin(merchants, eq(merchants.id, charges.merchantId))
+    .where(eq(codiNotifications.peyTransactionId, notice.transactionId))
+    .limit(1);
+  return notification ? { kind: "pn", ...notification } : null;
 }
 
 function mismatchesOf(
@@ -263,7 +313,7 @@ async function finishIncident(
   input: {
     eventId: string;
     now: Date;
-    type: "unknown_qr";
+    type: "unknown_qr" | "other";
     reason: string;
   },
 ) {

@@ -9,6 +9,8 @@ const charge: ChargeDto = {
   amountCents: 15050,
   currency: "MXN",
   status: "waiting_payment",
+  collectionMethod: "qr",
+  phoneLast4: null,
   createdAt: "2026-11-15T12:00:00.000Z",
   expiresAt: "2026-11-15T12:10:00.000Z",
   closedAt: null,

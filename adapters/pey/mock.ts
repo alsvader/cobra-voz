@@ -1,9 +1,12 @@
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import type {
+  CreatePushOutcome,
+  CreatePushRequest,
   CreateQrOutcome,
   CreateQrRequest,
   PeyAdapter,
   QueriedPayment,
+  QueryPushPaymentOutcome,
   QueryQrPaymentsOutcome,
 } from "./types";
 
@@ -43,10 +46,12 @@ export function isSimulatedQr(qrPayload: string): boolean {
 export type MockPeyAdapter = PeyAdapter & {
   /** Veces que se pidió crear un QR (las pruebas verifican que no se repite). */
   readonly calls: readonly CreateQrRequest[];
+  /** Veces que se pidió enviar una notificación. */
+  readonly pushCalls: readonly CreatePushRequest[];
   /** Identificadores consultados, en orden. */
   readonly queryCalls: readonly string[];
-  /** Programa el pago que devolverá la consulta de ese QR. */
-  seedPayment(peyQrId: string, payment: QueriedPayment): void;
+  /** Programa el pago que devolverá la consulta de ese QR o transacción. */
+  seedPayment(providerId: string, payment: QueriedPayment): void;
 };
 
 export function createMockPeyAdapter(
@@ -54,13 +59,16 @@ export function createMockPeyAdapter(
 ): MockPeyAdapter {
   const now = options.now ?? (() => new Date());
   const calls: CreateQrRequest[] = [];
+  const pushCalls: CreatePushRequest[] = [];
   const queryCalls: string[] = [];
   const issued = new Map<string, CreateQrRequest>();
+  const issuedPush = new Map<string, CreatePushRequest>();
   const seeded = new Map<string, QueriedPayment[]>();
 
   return {
     kind: "mock",
     calls,
+    pushCalls,
     queryCalls,
     seedPayment(peyQrId, payment) {
       const list = seeded.get(peyQrId) ?? [];
@@ -121,6 +129,60 @@ export function createMockPeyAdapter(
         };
       }
       return { status: "ok", payments: [] };
+    },
+    async createCodiPush(request): Promise<CreatePushOutcome> {
+      pushCalls.push(request);
+      if (request.amountCents === MOCK_UNCERTAIN_AMOUNT_CENTS) {
+        return {
+          status: "uncertain",
+          reason: "Simulación: la solicitud a Pey agotó el tiempo de espera.",
+        };
+      }
+      const transactionId = `mock-pn-${randomUUID()}`;
+      issuedPush.set(transactionId, request);
+      return {
+        status: "created",
+        transactionId,
+        codiId: Array.from({ length: 20 }, () => randomInt(0, 10)).join(""),
+        expiresAt: new Date(now().getTime() + request.expirationSeconds * 1000),
+      };
+    },
+    async queryCodiPushPayment(
+      transactionId,
+    ): Promise<QueryPushPaymentOutcome> {
+      queryCalls.push(transactionId);
+      const known = issuedPush.get(transactionId);
+      const programmed = seeded.get(transactionId);
+      if (!known && !programmed) {
+        return {
+          status: "unavailable",
+          reason: "Simulación: este proceso no envió esa notificación.",
+        };
+      }
+      if (known?.amountCents === MOCK_QUERY_UNAVAILABLE_AMOUNT_CENTS) {
+        return {
+          status: "unavailable",
+          reason: "Simulación: Pey no respondió a la consulta.",
+        };
+      }
+      const payment = programmed?.[0];
+      if (payment) {
+        return { status: "ok", payment, chargeId: known?.chargeId ?? null };
+      }
+      if (known?.amountCents === MOCK_QUERY_PAID_AMOUNT_CENTS) {
+        return {
+          status: "ok",
+          payment: {
+            transactionId,
+            amountCents: known.amountCents,
+            numRef: known.numRef,
+            bankAccountId: known.bankAccountId,
+            paidAt: now(),
+          },
+          chargeId: known.chargeId,
+        };
+      }
+      return { status: "ok", payment: null, chargeId: known?.chargeId ?? null };
     },
   };
 }

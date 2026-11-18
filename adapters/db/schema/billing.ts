@@ -53,6 +53,15 @@ export const charges = pgTable(
      * en cada pasada del cron.
      */
     lastReconciliationAt: timestamptz("last_reconciliation_at"),
+    /** `qr` muestra un código. `pn` envía el aviso al celular. */
+    collectionMethod: text("collection_method").notNull().default("qr"),
+    /**
+     * SHA-256 del celular de 10 dígitos. Sirve para rechazar un reintento
+     * con otro número. El número completo no se guarda.
+     */
+    phoneHash: text("phone_hash"),
+    /** Últimos 4 dígitos, para mostrarlos en la pantalla de espera. */
+    phoneLast4: text("phone_last4"),
     ...timestamps,
   },
   (table) => [
@@ -73,6 +82,22 @@ export const charges = pgTable(
     check(
       "charges_locally_closed_requires_closed_at",
       sql`${table.status} <> 'locally_closed' OR ${table.closedAt} IS NOT NULL`,
+    ),
+    check(
+      "charges_collection_method",
+      sql`${table.collectionMethod} in ('qr', 'pn')`,
+    ),
+    check(
+      "charges_phone_matches_method",
+      sql`(
+        ${table.collectionMethod} = 'qr'
+        AND ${table.phoneHash} IS NULL
+        AND ${table.phoneLast4} IS NULL
+      ) OR (
+        ${table.collectionMethod} = 'pn'
+        AND ${table.phoneHash} ~ '^[0-9a-f]{64}$'
+        AND ${table.phoneLast4} ~ '^[0-9]{4}$'
+      )`,
     ),
   ],
 ).enableRLS();
@@ -108,17 +133,62 @@ export const codiQrs = pgTable(
 ).enableRLS();
 
 /**
- * Movimiento bancario externo. Un QR puede tener N pagos (p. ej. un pago
- * tardío o excepcional). `paid_at` es el instante real del pago;
- * `recorded_at` es cuándo lo persistió CobraVoz: los totales usan `paid_at`.
+ * Notificación push de CoDi. Existe una fila solo cuando Pey respondió 200
+ * con `transactionId` y `codiId`. Si la creación quedó incierta, el cobro no
+ * tiene fila aquí y no se reintenta. `charge_id` único = 1:0..1 con el cobro.
+ */
+export const codiNotifications = pgTable(
+  "codi_notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chargeId: uuid("charge_id")
+      .notNull()
+      .unique("codi_notifications_charge_id_key")
+      .references(() => charges.id, { onDelete: "restrict" }),
+    /** ULID que Pey devuelve al crear y que el webhook repite. */
+    peyTransactionId: text("pey_transaction_id")
+      .notNull()
+      .unique("codi_notifications_pey_transaction_id_key"),
+    /** Folio de 20 dígitos que Banxico asigna al aviso. */
+    codiId: text("codi_id").notNull().unique("codi_notifications_codi_id_key"),
+    numRef: integer("num_ref").notNull(),
+    phoneLast4: text("phone_last4").notNull(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("codi_notifications_num_ref_idx").on(table.numRef),
+    check(
+      "codi_notifications_num_ref_max_7_digits",
+      sql`${table.numRef} BETWEEN 0 AND 9999999`,
+    ),
+    check(
+      "codi_notifications_phone_last4",
+      sql`${table.phoneLast4} ~ '^[0-9]{4}$'`,
+    ),
+    check(
+      "codi_notifications_codi_id_20_digits",
+      sql`${table.codiId} ~ '^[0-9]{20}$'`,
+    ),
+  ],
+).enableRLS();
+
+/**
+ * Movimiento bancario externo. Apunta a un QR o a una notificación, nunca a
+ * los dos. `paid_at` es el instante real del pago; `recorded_at` es cuándo lo
+ * persistió CobraVoz: los totales usan `paid_at`.
  */
 export const payments = pgTable(
   "payments",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    codiQrId: uuid("codi_qr_id")
-      .notNull()
-      .references(() => codiQrs.id, { onDelete: "restrict" }),
+    codiQrId: uuid("codi_qr_id").references(() => codiQrs.id, {
+      onDelete: "restrict",
+    }),
+    codiNotificationId: uuid("codi_notification_id").references(
+      (): AnyPgColumn => codiNotifications.id,
+      { onDelete: "restrict" },
+    ),
     provider: text("provider").notNull().default("pey"),
     providerTransactionId: text("provider_transaction_id").notNull(),
     /** Importe REALMENTE recibido (puede diferir del solicitado → incidencia). */
@@ -138,12 +208,21 @@ export const payments = pgTable(
       table.providerTransactionId,
     ),
     index("payments_codi_qr_id_idx").on(table.codiQrId),
+    index("payments_codi_notification_id_idx").on(table.codiNotificationId),
     index("payments_paid_at_idx").on(table.paidAt),
     index("payments_reconciliation_status_idx").on(table.reconciliationStatus),
     check("payments_amount_cents_positive", sql`${table.amountCents} > 0`),
     check(
       "payments_reconciled_requires_reconciled_at",
       sql`${table.reconciliationStatus} <> 'reconciled' OR ${table.reconciledAt} IS NOT NULL`,
+    ),
+    check(
+      "payments_one_instrument",
+      sql`(
+        ${table.codiQrId} IS NOT NULL AND ${table.codiNotificationId} IS NULL
+      ) OR (
+        ${table.codiQrId} IS NULL AND ${table.codiNotificationId} IS NOT NULL
+      )`,
     ),
   ],
 ).enableRLS();
@@ -171,6 +250,10 @@ export const paymentEvents = pgTable(
     codiQrId: uuid("codi_qr_id").references(() => codiQrs.id, {
       onDelete: "restrict",
     }),
+    codiNotificationId: uuid("codi_notification_id").references(
+      () => codiNotifications.id,
+      { onDelete: "restrict" },
+    ),
     paymentId: uuid("payment_id").references(() => payments.id, {
       onDelete: "restrict",
     }),
@@ -187,6 +270,9 @@ export const paymentEvents = pgTable(
       table.providerTransactionId,
     ),
     index("payment_events_codi_qr_id_idx").on(table.codiQrId),
+    index("payment_events_codi_notification_id_idx").on(
+      table.codiNotificationId,
+    ),
     index("payment_events_processing_status_idx").on(table.processingStatus),
   ],
 ).enableRLS();

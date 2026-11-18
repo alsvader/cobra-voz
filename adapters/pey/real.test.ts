@@ -262,6 +262,79 @@ describe("cliente Pey real", () => {
     });
   });
 
+  it("envía la notificación a /codi/pn con $0.01 y el celular", async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      now: () => now,
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), init: init ?? {} });
+        return jsonResponse({
+          transactionId: "01J5KXYZ1234567890ABCD",
+          codiId: "12345678901234567890",
+        });
+      },
+    });
+
+    const outcome = await pey.createCodiPush({
+      ...request,
+      phoneNumber: "5512345678",
+    });
+
+    expect(outcome).toMatchObject({
+      status: "created",
+      transactionId: "01J5KXYZ1234567890ABCD",
+      codiId: "12345678901234567890",
+    });
+    expect(calls[0].url).toBe("https://api.pey.mx/codi/pn");
+    const body = JSON.parse(String(calls[0].init.body));
+    expect(body).toMatchObject({
+      amount: 0.01,
+      phoneNumber: "5512345678",
+      numRef: "1234",
+      expiration: 600,
+      bankAccountId: "acct-1",
+    });
+    expect(body.generateImage).toBeUndefined();
+    expect(String(calls[0].init.body)).not.toContain("150.50");
+  });
+
+  it("un 200 sin folio deja la notificación incierta", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      fetch: async () => jsonResponse({ transactionId: "01J5KXYZ" }),
+    });
+    const outcome = await pey.createCodiPush({
+      ...request,
+      phoneNumber: "5512345678",
+    });
+    expect(outcome.status).toBe("uncertain");
+  });
+
+  it("consulta la notificación por su transactionId", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      fetch: async () =>
+        jsonResponse({
+          id: "01J5KXYZ1234567890ABCD",
+          status: "PAID",
+          amount: 0.01,
+          currency: "MXN",
+          paymentMethod: "CODI",
+          payableType: "API_CODI_PN",
+          datePaid: 1790724758,
+          metadata: { externalMetadata: { chargeId: request.chargeId } },
+        }),
+    });
+
+    const outcome = await pey.queryCodiPushPayment("01J5KXYZ1234567890ABCD");
+    expect(outcome).toMatchObject({
+      status: "ok",
+      chargeId: request.chargeId,
+      payment: { transactionId: "01J5KXYZ1234567890ABCD", amountCents: 1 },
+    });
+  });
+
   it("un error HTTP de la consulta no se toma como «no hubo pago»", async () => {
     const pey = createRealPeyAdapter({
       apiKey: "pey-live-key",

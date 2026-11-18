@@ -22,6 +22,13 @@
       "when": 1794788591186,
       "tag": "0002_last_reconciliation_at",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794977479816,
+      "tag": "0003_cobro_push_notification",
+      "breakpoints": true
     }
   ]
 }

@@ -45,7 +45,7 @@ export const POST = withMerchantApi(async (request, { merchantId }) => {
         ? errorJson(
             409,
             "idempotency_conflict",
-            "Esta solicitud ya se usó con otro importe. Inicia un cobro nuevo.",
+            "Esta solicitud ya se usó con otros datos. Inicia un cobro nuevo.",
           )
         : errorJson(
             403,
