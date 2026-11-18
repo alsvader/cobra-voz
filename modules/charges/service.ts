@@ -7,6 +7,7 @@ import {
   paymentIncidents,
   merchants,
 } from "@/adapters/db/schema";
+import { canonicalCodiId } from "@/adapters/pey/contract";
 import { isSimulatedQr } from "@/adapters/pey/mock";
 import type {
   CreatePushOutcome,
@@ -227,7 +228,7 @@ function validatePush(
   if (!outcome.transactionId?.trim() || outcome.transactionId.length > 128) {
     return "Pey no devolvió el identificador de la notificación.";
   }
-  if (!/^[0-9]{20}$/.test(outcome.codiId ?? "")) {
+  if (!outcome.codiId || !canonicalCodiId(outcome.codiId)) {
     return "Pey no devolvió el folio de la notificación.";
   }
   if (

@@ -1,5 +1,9 @@
 import { pesosNumberToCents } from "@/modules/charges/amount";
-import { REAL_QR_AMOUNT_CENTS, centsToPeyAmountToken } from "./contract";
+import {
+  REAL_QR_AMOUNT_CENTS,
+  canonicalCodiId,
+  centsToPeyAmountToken,
+} from "./contract";
 import type {
   CreatePushOutcome,
   CreatePushRequest,
@@ -343,14 +347,10 @@ function readTransactionId(row: Record<string, unknown>): string | null {
   return id;
 }
 
-/** Folio Banxico: 20 dígitos. Acepta texto, espacios o un número en el JSON crudo. */
+/** Folio de Pey: 20 dígitos, un número en el JSON crudo, o un token con letras. */
 function readCodiId(row: Record<string, unknown>, raw: string): string | null {
   const value = row.codiId ?? row.codi_id;
-  if (typeof value === "string") {
-    const digits = value.replace(/[\s-]/g, "");
-    if (/^[0-9]{20}$/.test(digits)) return digits;
-    return null;
-  }
+  if (typeof value === "string") return canonicalCodiId(value);
   const match = raw.match(
     /"(?:codiId|codi_id)"\s*:\s*(?:"([0-9]{20})"|([0-9]{20})(?![0-9]))/,
   );
@@ -360,7 +360,22 @@ function readCodiId(row: Record<string, unknown>, raw: string): string | null {
 /** Claves y tipos, nunca el folio, el celular ni el mensaje libre de Pey. */
 function pushShape(row: Record<string, unknown>): string {
   const keys = Object.keys(row).slice(0, 12).join(",") || "ninguna";
-  return `claves: ${keys}; transactionId: ${valueKind(row.transactionId ?? row.id)}; codiId: ${valueKind(row.codiId ?? row.codi_id)}`;
+  return `claves: ${keys}; transactionId: ${valueKind(row.transactionId ?? row.id)}; codiId: ${folioKind(row.codiId ?? row.codi_id)}`;
+}
+
+function folioKind(value: unknown): string {
+  if (typeof value !== "string") return valueKind(value);
+  const token = value.normalize("NFKC").trim();
+  let digits = 0;
+  let letters = 0;
+  let other = 0;
+  for (const char of token) {
+    if (char >= "0" && char <= "9") digits += 1;
+    else if ((char >= "A" && char <= "Z") || (char >= "a" && char <= "z")) {
+      letters += 1;
+    } else other += 1;
+  }
+  return `texto(${token.length},D${digits}L${letters}O${other})`;
 }
 
 function valueKind(value: unknown): string {

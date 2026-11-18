@@ -338,6 +338,26 @@ describe("cliente Pey real", () => {
     });
   });
 
+  it("acepta un folio de 20 caracteres con letras", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      now: () => now,
+      fetch: async () =>
+        jsonResponse({
+          transactionId: "01J5KXYZ1234567890ABCD",
+          codiId: "AB12CD34EF56GH78IJ90",
+        }),
+    });
+    const outcome = await pey.createCodiPush({
+      ...request,
+      phoneNumber: "5512345678",
+    });
+    expect(outcome).toMatchObject({
+      status: "created",
+      codiId: "AB12CD34EF56GH78IJ90",
+    });
+  });
+
   it("acepta el folio con espacios y el id cuando no viene transactionId", async () => {
     const pey = createRealPeyAdapter({
       apiKey: "pey-live-key",

@@ -149,7 +149,7 @@ export const codiNotifications = pgTable(
     peyTransactionId: text("pey_transaction_id")
       .notNull()
       .unique("codi_notifications_pey_transaction_id_key"),
-    /** Folio de 20 dígitos que Banxico asigna al aviso. */
+    /** Folio que Pey asigna al aviso. 20 dígitos o un token con letras. */
     codiId: text("codi_id").notNull().unique("codi_notifications_codi_id_key"),
     numRef: integer("num_ref").notNull(),
     phoneLast4: text("phone_last4").notNull(),
@@ -167,8 +167,8 @@ export const codiNotifications = pgTable(
       sql`${table.phoneLast4} ~ '^[0-9]{4}$'`,
     ),
     check(
-      "codi_notifications_codi_id_20_digits",
-      sql`${table.codiId} ~ '^[0-9]{20}$'`,
+      "codi_notifications_codi_id_token",
+      sql`${table.codiId} ~ '^[A-Za-z0-9][A-Za-z0-9+/=._:-]{0,63}$'`,
     ),
   ],
 ).enableRLS();

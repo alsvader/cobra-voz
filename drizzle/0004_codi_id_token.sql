@@ -1,0 +1,2 @@
+ALTER TABLE "codi_notifications" DROP CONSTRAINT "codi_notifications_codi_id_20_digits";--> statement-breakpoint
+ALTER TABLE "codi_notifications" ADD CONSTRAINT "codi_notifications_codi_id_token" CHECK ("codi_notifications"."codi_id" ~ '^[A-Za-z0-9][A-Za-z0-9+/=._:-]{0,63}$');
