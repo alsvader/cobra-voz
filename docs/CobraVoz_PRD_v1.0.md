@@ -14,6 +14,8 @@
 
 > **Cambio 2026-11-18, enlace.** La tercera forma es «Enlace». No pide celular. En el MVP Pey crea el enlace por $0.01, igual que el QR y la notificación; la app sigue mostrando el importe capturado. Un 400 cierra la intención porque el enlace no existe. Un 500 o un corte dejan la creación incierta y no se reintentan. El cliente regresa a páginas públicas que no marcan el cobro. El mismo webhook y la misma conciliación cierran el pago cuando llega el centavo. El total del día suma el dinero liquidado. El anuncio con la PWA cerrada sigue fuera de alcance.
 
+> **Nota 2026-11-19, enlace.** El enlace se crea y el cliente recibe el aviso CoDi. En la app Banamex de iPhone el banco rechazó el pago al aceptarlo. La notificación directa de $0.01, probada enseguida, sí se cobró. El fallo queda del lado del banco. El cobro por enlace permanece en espera.
+
 ## 1. Resumen ejecutivo
 
 **CobraVoz** es una aplicación web instalable (PWA) para que pequeños comerciantes de México puedan cobrar por medio de CoDi usando la voz como entrada del importe. El comerciante dicta una cantidad, revisa y confirma lo reconocido, presenta un QR real o envía una notificación al celular del cliente mediante la API de Pey, recibe una confirmación visual y —si la aplicación está activa y el dispositivo lo permite— audible cuando el pago está verificado, y consulta sus ventas diarias e historial.

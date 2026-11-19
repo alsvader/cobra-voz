@@ -10,7 +10,7 @@
 
 > **Cambio 2026-11-18.** El cobro puede ser un QR, que sigue como default, o una notificación CoDi. El contrato de Pey está en `adapters/pey/README.md`. La sección 17 registra el modelo. No reabre el anuncio al comerciante con la PWA cerrada.
 
-> **Cambio 2026-11-18, enlace.** La tercera forma es el enlace de pago. La sección 18 registra el modelo. El cron de Supabase no cambia. En el MVP el enlace también mueve $0.01.
+> **Cambio 2026-11-18, enlace.** La tercera forma es el enlace de pago. La sección 18 registra el modelo. El cron de Supabase no cambia. En el MVP el enlace también mueve $0.01. El 2026-11-19 Banamex en iPhone rechazó ese pago; la notificación directa sí liquidó.
 
 ## 1. ADR y decisiones congeladas
 
@@ -304,3 +304,4 @@ El cambio del 2026-11-18 agrega la notificación como segundo instrumento. El cr
 - `successUrl` y `backUrl` son páginas públicas. No viven bajo `/cobro` y no marcan el pago.
 - El webhook `payment_link.status_updated` se casa por `paymentLinkId`. Un id desconocido no crea un cobro. `pending`, `processing` y `partial` no cierran. `paid` cierra si la base es $0.01 o coincide con el importe del cobro. `payments.amount_cents` guarda el monto liquidado.
 - La conciliación usa `GET /payment-link/:id` en el mismo cron. Una consulta no disponible no marca pagado y no borra el cobro.
+- Probado el 2026-11-19: el enlace de $0.01 entrega el aviso CoDi, y la app Banamex en iPhone rechaza el pago al aceptarlo. La notificación directa del mismo centavo sí liquida. Un rechazo del banco no cambia el estado: el cobro sigue en espera.

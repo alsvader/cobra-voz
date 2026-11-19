@@ -40,15 +40,16 @@ Para quien atiende solo un puesto de comida, una fonda o un tianguis: muchos cob
 7. Al volver a Inicio o a Ventas, el pago conciliado aparece en el total del día.
 
 <p align="center">
-  <img src="docs/readme/recorrido.gif" width="280" alt="Recorrido de un cobro: Inicio, confirmar $150.00 y el QR de prueba en espera">
+  <img src="docs/readme/recorrido.gif" width="280" alt="Recorrido de un cobro: Inicio, confirmar $150.00 eligiendo código QR, notificación o enlace, y el QR de prueba en espera">
 </p>
 
-El recorrido de arriba usa la captura manual de $150.00 en el simulador local.
+El recorrido de arriba usa la captura manual de $150.00 en el simulador local. En confirmar se elige código QR, notificación o enlace.
 
 ### Así está el piloto
 
 - En local y en preview responde el simulador, aunque exista una clave de Pey. El QR dice «QR de prueba · no sirve para pagar». El importe **$13.01** deja la creación en estado incierto, en QR, en notificación y en enlace. **$13.02**, al pulsar «Consultar nuevamente», marca pagado ese cobro de prueba. **$13.03** simula que la consulta no responde.
-- En producción, con `PEY_API_KEY`, el QR, la notificación y el enlace bancarios son siempre de **$0.01**. El importe confirmado en la app se guarda y se muestra como la venta. El banco mueve un centavo, y ese centavo concilia el cobro. El total del día suma ese centavo, venga de un QR, de una notificación o de un enlace.
+- En producción, con `PEY_API_KEY`, el QR, la notificación y el enlace bancarios son siempre de **$0.01**. El importe confirmado en la app se guarda y se muestra como la venta. En QR y notificación el banco mueve un centavo y ese centavo concilia el cobro. El total del día suma el dinero recibido.
+- El 2026-11-19 el enlace de $0.01 llegó hasta la app Banamex en iPhone y el banco rechazó el pago al aceptarlo. La notificación directa, en la misma prueba, sí se cobró. El cobro por enlace queda en espera: Pey no manda un aviso de rechazo.
 - La notificación no guarda el celular completo: solo un resumen y los últimos 4 dígitos.
 - Con «Anunciar pagos» activo, un pago que la pantalla de cobro ve llegar se dice una sola vez: «¡Pago recibido!» y el importe en palabras. Hace falta la pestaña abierta. El aviso en pantalla aparece igual si el audio no sale.
 

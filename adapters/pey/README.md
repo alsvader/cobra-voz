@@ -96,6 +96,12 @@ En el MVP el `amount` del enlace es **$0.01**, el mismo centavo del QR y de la
 notificación. El cobro sigue guardando el importe capturado. Una sola llamada.
 No se usa `POST /payment-link/update`: otro importe es otro cobro.
 
+El 2026-11-19 el enlace se creó, el cliente escribió su celular en la página de
+Pey y Banxico entregó el aviso. Al aceptarlo en la app Banamex de iPhone, el
+banco rechazó el pago. La notificación directa de CobraVoz, con el mismo
+centavo y la misma cuenta, sí liquidó. Pey no avisa ese rechazo: el cobro
+sigue en espera.
+
 El cuerpo lleva ese `amount` como token decimal, `successUrl` y `backUrl` HTTPS,
 `hasTip: false`, `clientReferenceId` igual al id del cobro y
 `metadata.chargeId`. Esas dos direcciones salen de `NEXT_PUBLIC_APP_URL` más
