@@ -1,7 +1,13 @@
 import { and, eq, gte, lt, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "@/adapters/db/create-db";
-import { charges, codiQrs, merchants, payments } from "@/adapters/db/schema";
+import {
+  charges,
+  codiNotifications,
+  codiQrs,
+  merchants,
+  payments,
+} from "@/adapters/db/schema";
 import { chargeReference } from "@/modules/charges/reference";
 import { chargeIdSchema } from "@/modules/charges/schemas";
 import { loadSettledCharge } from "@/modules/charges/service";
@@ -72,7 +78,9 @@ async function expireDue(db: Database, merchantId: string, now: Date) {
 
 /**
  * Total y número de pagos conciliados cuyo `paid_at` cae en el día comercial
- * del comercio. Un incidente, un pendiente o un vencido no entra.
+ * del comercio. Cuenta el QR y la notificación: el pago de un aviso no tiene
+ * `codi_qr_id`. Suma el dinero recibido, no el importe capturado. Un
+ * incidente, un pendiente o un vencido no entra.
  */
 export async function getDailySummary(
   deps: SalesDeps,
@@ -88,8 +96,15 @@ export async function getDailySummary(
       count: sql<number>`count(${payments.id})::int`,
     })
     .from(payments)
-    .innerJoin(codiQrs, eq(codiQrs.id, payments.codiQrId))
-    .innerJoin(charges, eq(charges.id, codiQrs.chargeId))
+    .leftJoin(codiQrs, eq(codiQrs.id, payments.codiQrId))
+    .leftJoin(
+      codiNotifications,
+      eq(codiNotifications.id, payments.codiNotificationId),
+    )
+    .innerJoin(
+      charges,
+      sql`${charges.id} = coalesce(${codiQrs.chargeId}, ${codiNotifications.chargeId})`,
+    )
     .where(
       and(
         eq(charges.merchantId, merchantId),

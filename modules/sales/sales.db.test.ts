@@ -1,7 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { charges, codiQrs, merchants, payments } from "@/adapters/db/schema";
+import {
+  charges,
+  codiNotifications,
+  codiQrs,
+  merchants,
+  payments,
+} from "@/adapters/db/schema";
 import { createTestDb } from "@/adapters/db/testing";
 import { getDailySummary, getMovementDetail, listMovements } from "./service";
 
@@ -33,10 +39,13 @@ async function addCharge(
     reconciliationStatus?: "reconciled" | "incident";
     /** Importe del pago. Si no viene, es el mismo que el cobro. */
     receivedCents?: number;
+    /** `pn` guarda el pago en la notificación, sin QR. */
+    method?: "qr" | "pn";
   } = {},
 ) {
   const amountCents = options.amountCents ?? 15050;
   const createdAt = options.createdAt ?? NOON;
+  const method = options.method ?? "qr";
   const [charge] = await db
     .insert(charges)
     .values({
@@ -44,6 +53,12 @@ async function addCharge(
       amountCents,
       idempotencyKey: randomUUID(),
       status: "waiting_payment",
+      collectionMethod: method,
+      phoneHash:
+        method === "pn"
+          ? createHash("sha256").update("5512345678").digest("hex")
+          : null,
+      phoneLast4: method === "pn" ? "5678" : null,
       createdAt,
       expiresAt:
         options.expiresAt === undefined
@@ -53,23 +68,39 @@ async function addCharge(
     .returning();
 
   if (options.paidAt || options.status === "incident") {
-    const [qr] = await db
-      .insert(codiQrs)
-      .values({
-        chargeId: charge.id,
-        peyQrId: `qr-${randomUUID()}`,
-        numRef: 123456,
-        qrPayload: `COBRAVOZ-MOCK|${charge.id}`,
-        expiresAt: new Date(createdAt.getTime() + 600_000),
-      })
-      .returning();
+    const instrument =
+      method === "pn"
+        ? await db
+            .insert(codiNotifications)
+            .values({
+              chargeId: charge.id,
+              peyTransactionId: `pn-${randomUUID()}`,
+              codiId: randomUUID().replaceAll("-", "").slice(0, 20),
+              numRef: 123456,
+              phoneLast4: "5678",
+              expiresAt: new Date(createdAt.getTime() + 600_000),
+            })
+            .returning()
+            .then((rows) => rows[0])
+        : await db
+            .insert(codiQrs)
+            .values({
+              chargeId: charge.id,
+              peyQrId: `qr-${randomUUID()}`,
+              numRef: 123456,
+              qrPayload: `COBRAVOZ-MOCK|${charge.id}`,
+              expiresAt: new Date(createdAt.getTime() + 600_000),
+            })
+            .returning()
+            .then((rows) => rows[0]);
     if (options.paidAt || options.reconciliationStatus) {
       const reconciled =
         (options.reconciliationStatus ?? "reconciled") === "reconciled";
       const [payment] = await db
         .insert(payments)
         .values({
-          codiQrId: qr.id,
+          codiQrId: method === "qr" ? instrument.id : null,
+          codiNotificationId: method === "pn" ? instrument.id : null,
           providerTransactionId: `tx-${randomUUID()}`,
           amountCents: options.receivedCents ?? amountCents,
           reconciliationStatus: reconciled ? "reconciled" : "incident",
@@ -114,6 +145,11 @@ afterEach(async () => {
       .from(codiQrs)
       .where(inArray(codiQrs.chargeId, chargeIds));
     const qrIds = qrRows.map((row) => row.id);
+    const noteRows = await db
+      .select({ id: codiNotifications.id })
+      .from(codiNotifications)
+      .where(inArray(codiNotifications.chargeId, chargeIds));
+    const noteIds = noteRows.map((row) => row.id);
     await db
       .update(charges)
       .set({ status: "created", paidPaymentId: null })
@@ -121,6 +157,14 @@ afterEach(async () => {
     if (qrIds.length > 0) {
       await db.delete(payments).where(inArray(payments.codiQrId, qrIds));
       await db.delete(codiQrs).where(inArray(codiQrs.id, qrIds));
+    }
+    if (noteIds.length > 0) {
+      await db
+        .delete(payments)
+        .where(inArray(payments.codiNotificationId, noteIds));
+      await db
+        .delete(codiNotifications)
+        .where(inArray(codiNotifications.id, noteIds));
     }
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
@@ -162,6 +206,36 @@ describe("getDailySummary", () => {
     const summary = await getDailySummary({ db, now: () => NOON }, owner.id);
 
     expect(summary).toEqual({ totalCents: 0, count: 0 });
+  });
+
+  it("suma el pago conciliado de una notificación junto al del QR", async () => {
+    const merchant = await newMerchant();
+    const other = await newMerchant();
+    await addCharge(merchant.id, {
+      amountCents: 10000,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+    });
+    await addCharge(merchant.id, {
+      method: "pn",
+      amountCents: 15050,
+      receivedCents: 1,
+      paidAt: new Date("2026-11-15T18:30:00.000Z"),
+    });
+    await addCharge(merchant.id, {
+      method: "pn",
+      amountCents: 8000,
+      reconciliationStatus: "incident",
+      paidAt: new Date("2026-11-15T19:00:00.000Z"),
+    });
+    await addCharge(other.id, {
+      method: "pn",
+      receivedCents: 1,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+    });
+
+    const summary = await getDailySummary({ db, now: () => NOON }, merchant.id);
+
+    expect(summary).toEqual({ totalCents: 10001, count: 2 });
   });
 });
 
