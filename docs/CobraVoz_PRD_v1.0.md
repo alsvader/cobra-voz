@@ -10,9 +10,11 @@
 
 > **Nota de consolidación:** este archivo organiza en formato ejecutable para un equipo de desarrollo las decisiones funcionales aprobadas. Los identificadores de requisitos se presentan de forma normalizada para facilitar su rastreo. No amplía el alcance.
 
+> **Cambio 2026-11-18.** Al confirmar el importe el comerciante elige «Código QR» o «Notificación». El QR sigue siendo el default. La notificación pide un celular de 10 dígitos, sin lada; CobraVoz no guarda el número completo. Pey envía el aviso, el cliente lo paga en su app y el mismo webhook y la misma conciliación cierran el cobro. El banco sigue moviendo $0.01. El total del día incluye ese pago conciliado y suma el dinero recibido. El anuncio al comerciante con la PWA cerrada sigue fuera de alcance: no es esta notificación.
+
 ## 1. Resumen ejecutivo
 
-**CobraVoz** es una aplicación web instalable (PWA) para que pequeños comerciantes de México puedan cobrar por medio de CoDi usando la voz como entrada del importe. El comerciante dicta una cantidad, revisa y confirma lo reconocido, presenta un QR real generado mediante la API de Pey, recibe una confirmación visual y —si la aplicación está activa y el dispositivo lo permite— audible cuando el pago está verificado, y consulta sus ventas diarias e historial.
+**CobraVoz** es una aplicación web instalable (PWA) para que pequeños comerciantes de México puedan cobrar por medio de CoDi usando la voz como entrada del importe. El comerciante dicta una cantidad, revisa y confirma lo reconocido, presenta un QR real o envía una notificación al celular del cliente mediante la API de Pey, recibe una confirmación visual y —si la aplicación está activa y el dispositivo lo permite— audible cuando el pago está verificado, y consulta sus ventas diarias e historial.
 
 **Propuesta de valor:** «Cobra fácilmente, sin dejar de atender tu negocio».
 
@@ -49,7 +51,7 @@ El objetivo es demostrar **de extremo a extremo con Pey/CoDi real** el recorrido
 1. El comerciante dicta un importe.
 2. CobraVoz lo transcribe e interpreta.
 3. El comerciante confirma el importe explícitamente.
-4. CobraVoz genera y muestra un QR CoDi real.
+4. CobraVoz genera y muestra un QR CoDi real, o envía una notificación al celular de 10 dígitos si el comerciante eligió esa forma.
 5. El cliente realiza el pago.
 6. El backend verifica y registra la confirmación de Pey.
 7. La PWA muestra el éxito; anuncia el pago por voz solo si está activa y el navegador lo permite.
@@ -57,8 +59,8 @@ El objetivo es demostrar **de extremo a extremo con Pey/CoDi real** el recorrido
 
 ### Criterios de aceptación de la demo
 
-- No se crea un QR sin la confirmación del importe.
-- El QR corresponde al importe confirmado y a la cuenta bancaria configurada.
+- No se crea un QR ni un aviso sin la confirmación del importe.
+- El QR o la notificación corresponden al importe confirmado y a la cuenta bancaria configurada.
 - Ningún pago pendiente o no verificable aparece como pagado.
 - Un mismo evento o pago repetido no duplica las ventas.
 - El comerciante puede usar captura manual si falla o no autoriza el micrófono.
@@ -73,7 +75,7 @@ El objetivo es demostrar **de extremo a extremo con Pey/CoDi real** el recorrido
 |---|---|---|
 | Acceso y comercio | M01 | Registro con correo y contraseña sin verificación de correo, login, sesión, consulta de negocio y cuenta receptora compartida; preferencias de audio |
 | Cobro por voz | M02 | Pulsar para hablar, transcribir, interpretar, revisar, corregir o capturar importe manualmente |
-| QR y pagos CoDi | M03 | Crear QR real mediante Pey, recibir webhook, consultar, conciliar y persistir pagos |
+| QR y pagos CoDi | M03 | Crear un QR real o una notificación CoDi mediante Pey, recibir webhook, consultar, conciliar y persistir pagos |
 | Confirmación y notificaciones | M04 | Feedback de estados, confirmación visual y audio de pagos nuevos verificados cuando aplique |
 | Ventas | M05 | Total cobrado hoy, número de pagos conciliados, movimientos recientes e historial |
 
@@ -97,7 +99,7 @@ No implementar en el MVP:
 - Facturación electrónica, exportación contable, filtros avanzados, gráficas o reportes complejos.
 - Verificación de correo, recuperación de contraseña, panel administrativo y equipos con múltiples permisos.
 - Reconocimiento continuo, activación por palabra clave o asistente conversacional.
-- Notificaciones push o anuncios de pagos cuando la PWA está cerrada.
+- Anuncios de pagos cuando la PWA está cerrada. La notificación CoDi al celular del cliente sí está en alcance.
 - QR de demostración falso presentado como cobro real.
 
 ## 6. Casos de uso
@@ -106,13 +108,13 @@ No implementar en el MVP:
 
 **Actor:** comerciante autenticado.  
 **Precondición:** hay conexión y no existe un cobro activo incompatible.  
-**Secuencia:** Inicio → grabación breve → STT → parser → P02 → confirmar → crear QR en Pey → P03 espera → confirmación bancaria → éxito.  
+**Secuencia:** Inicio → grabación breve → STT → parser → P02 → elegir QR o notificación → confirmar → Pey crea el instrumento → P03 espera → confirmación bancaria → éxito.  
 **Resultado:** el pago verificado queda persistido y aparece en el historial.
 
 ### CU-02 — Corregir reconocimiento erróneo
 
 **Evento:** lo transcrito no corresponde al importe deseado o no se entiende.  
-**Resultado:** puede volver a hablar o introducir la cantidad manualmente; no se crea un QR con una interpretación incierta.
+**Resultado:** puede volver a hablar o introducir la cantidad manualmente; no se crea un QR ni un aviso con una interpretación incierta.
 
 ### CU-03 — Confirmar pago exitoso
 
@@ -124,10 +126,10 @@ No implementar en el MVP:
 **Evento:** el comprador dice que ya pagó pero CobraVoz no dispone de confirmación.  
 **Resultado:** mostrar «Pago sin confirmar», ofrecer «Consultar nuevamente» y «Cerrar cobro» (cierre únicamente local), sin acreditar venta.
 
-### CU-05 — Cambiar importe antes de generar QR
+### CU-05 — Cambiar importe antes de cobrar
 
 **Evento:** el comerciante detecta error en P02.  
-**Resultado:** corregir número válido (máximo dos decimales), volver a hablar o cancelar. Una vez generado el QR, el importe de esa solicitud no se modifica.
+**Resultado:** corregir número válido (máximo dos decimales), volver a hablar, cambiar la forma de cobro o cancelar. Una vez generado el QR o enviado el aviso, el importe de esa solicitud no se modifica.
 
 ### CU-06 — Consultar ventas del día e historial
 
@@ -147,23 +149,23 @@ No implementar en el MVP:
 |---|---|
 | RN-01 | El registro crea un comercio con correo y contraseña. Todos los comercios usan la misma cuenta receptora Pey configurada en el servidor. El comerciante no la cambia desde la app. |
 | RN-02 | Todo importe debe ser mayor que cero, estar expresado en MXN y tener como máximo dos decimales. |
-| RN-03 | El comerciante debe revisar y confirmar explícitamente el importe antes de solicitar un QR. |
+| RN-03 | El comerciante debe revisar y confirmar explícitamente el importe antes de solicitar un QR o una notificación. |
 | RN-04 | Si la voz falla o es ambigua, se debe permitir reintento o captura manual; nunca asumir un importe. |
-| RN-05 | El importe de una solicitud no se modifica después de generar el QR. Una nueva cantidad requiere una nueva intención de cobro. |
+| RN-05 | El importe de una solicitud no se modifica después de generar el QR o de enviar el aviso. Una nueva cantidad, otra forma de cobro u otro celular requieren una nueva intención. |
 | RN-06 | Solo puede existir un cobro visible activo por sesión; la app evita acciones simultáneas incompatibles. |
 | RN-07 | Cada intención de cobro posee un identificador interno único y protección contra peticiones duplicadas. |
-| RN-08 | La vigencia inicial propuesta para el QR es de 600 segundos; la compatibilidad exacta con Pey debe validarse. |
-| RN-09 | Se muestra únicamente un QR real recibido de Pey; nunca un QR supuesto durante la generación. |
+| RN-08 | La vigencia inicial del QR y de la notificación es de 600 segundos. |
+| RN-09 | Se muestra únicamente un QR real recibido de Pey; nunca un QR supuesto durante la generación. Una notificación no muestra un código: muestra los últimos 4 dígitos del celular. |
 | RN-10 | Un pago solo es «Pagado» si la evidencia bancaria es verificable y cumple las validaciones de conciliación. |
-| RN-11 | Los webhooks de Pey deben validar su firma y corresponder al QR, importe y cuenta previstos. |
+| RN-11 | Los webhooks de Pey deben validar su firma y corresponder al QR o a la notificación, al importe y a la cuenta previstos. |
 | RN-12 | Eventos y transacciones duplicadas se procesan idempotentemente y no duplican ventas. |
 | RN-13 | «Pendiente» y «Verificación no disponible» no equivalen a pago rechazado. |
 | RN-14 | Pagos tardíos, importes inconsistentes o referencias extrañas se preservan y gestionan como incidencias cuando aplique. |
 | RN-15 | No existe opción para marcar manualmente un pago como pagado ni aceptar capturas como confirmación. |
 | RN-16 | Los totales y el conteo de ventas incluyen solo pagos confirmados y correctamente conciliados. |
-| RN-17 | Cobros, QR, pagos y eventos deben persistir y conservar trazabilidad; la app no depende de su sesión abierta para registrar pagos. |
+| RN-17 | Cobros, QR, notificaciones, pagos y eventos deben persistir y conservar trazabilidad; la app no depende de su sesión abierta para registrar pagos. El celular completo no se guarda. |
 | RN-18 | Al reabrir la PWA se recupera el estado desde el servidor sin duplicar cobros ni repetir anuncios de voz. |
-| RN-19 | Sin conexión no puede crearse un QR nuevo; se debe informar y conservar el contexto del usuario. |
+| RN-19 | Sin conexión no puede crearse un QR ni un aviso nuevos; se debe informar y conservar el contexto del usuario. |
 | RN-20 | Las credenciales de Pey, OpenAI y acceso privilegiado a datos se almacenan únicamente en el servidor. |
 
 ### Aclaraciones de conciliación
@@ -172,15 +174,15 @@ No implementar en el MVP:
 - Si llega un pago después del vencimiento o del cierre local, el servidor lo registra y reconcilia; se muestra el estado correcto al regresar.
 - El total del día utiliza la fecha efectiva de pago (`paid_at`) en la zona horaria configurada para el comercio; no la fecha en que llegó el webhook.
 - Los cobros expirados, pendientes, cerrados localmente o con incidencia **no cuentan** como ventas hasta que exista pago verificable y conciliado.
-- Una respuesta incierta al crear QR no se reintenta automáticamente mientras no se resuelva si Pey pudo generarlo.
+- Una respuesta incierta al crear el QR o el aviso no se reintenta automáticamente mientras no se resuelva si Pey pudo generarlo.
 
 ## 8. Estados funcionales
 
 ### Cobro
 
-- **Creado:** intención persistida antes de solicitar QR.
-- **Generando QR:** estado transitorio de interfaz y operación técnica en curso.
-- **Esperando pago:** QR real disponible, aún sin confirmación.
+- **Creado:** intención persistida antes de solicitar el QR o el aviso.
+- **Generando QR:** estado transitorio de interfaz y operación técnica en curso. Con notificación, el texto de espera es «Enviando aviso…».
+- **Esperando pago:** QR real disponible, o aviso enviado, aún sin confirmación.
 - **Pagado:** pago verificado y persistido.
 - **Expirado:** la vigencia anunciada del QR ha concluido; no equivale a afirmar que jamás podrá recibirse un pago tardío.
 - **Cerrado localmente:** el comerciante dejó de atender ese cobro, sin cancelación bancaria confirmada.
@@ -200,8 +202,8 @@ No implementar en el MVP:
 | ID | Pantalla | Propósito |
 |---|---|---|
 | P01 | Inicio | Iniciar cobro por voz/manual; ver resumen de hoy, recientes y cobro pendiente |
-| P02 | Confirmación del importe | Revisar/corregir el monto antes del QR |
-| P03 | Cobro CoDi | Generación, QR en espera, resultado, expiración e incidencias en una pantalla dinámica |
+| P02 | Confirmación del importe | Revisar/corregir el monto y elegir QR o notificación antes de cobrar |
+| P03 | Cobro CoDi | Generación, espera con QR o con aviso, resultado, expiración e incidencias en una pantalla dinámica |
 | P04 | Ventas | Resumen diario e historial |
 | A01 | Acceso | Inicio de sesión |
 | A02 | Configuración | Datos del comercio, audio y salida |
@@ -252,7 +254,7 @@ El MVP puede declararse listo para demo solo cuando:
 1. A01 autentica al comerciante y protege rutas privadas.
 2. P01 permite voz y captura manual.
 3. P02 exige importe válido y confirmación expresa.
-4. P03 obtiene un QR real de Pey, sin duplicar por doble clic.
+4. P03 obtiene un QR real de Pey, o confirma el envío del aviso, sin duplicar por doble clic.
 5. Webhook válido registra el pago exactamente una vez; firma inválida no se acredita.
 6. Se puede recuperar un pago mediante consulta/conciliación si falla la notificación.
 7. El éxito se muestra visualmente y el audio funciona donde el navegador lo permita, sin repetirse.
@@ -263,3 +265,5 @@ El MVP puede declararse listo para demo solo cuando:
 ## 13. Control de cambios
 
 **Este PRD v1.0 está congelado.** Cambios a alcance, reglas de negocio, pantallas o flujo bancario requieren una decisión explícita y registro de versión. `DESIGN.md` y `IMPLEMENTATION_PLAN.md` son especificaciones operativas derivadas y no pueden contradecirlo.
+
+El cambio del 2026-11-18 agrega la notificación CoDi como forma de cobro alternativa al QR. No abre el anuncio al comerciante con la PWA cerrada.

@@ -8,6 +8,8 @@
 
 > Este documento codifica las decisiones de arquitectura de información, flujos, estados e interfaces de baja fidelidad ya aprobadas. No es un nuevo rediseño. `DESIGN.md` define su representación visual sin alterar estructura ni comportamiento.
 
+> **Cambio 2026-11-18.** En P02, antes de confirmar, se elige «Código QR» (marcado) o «Notificación». La notificación muestra «Celular del cliente»: 10 dígitos, sin lada, y «Confirmar importe» sigue deshabilitado hasta que el número es válido. En P03 no hay código: se ven el importe, la referencia, el tiempo y los últimos 4. El pendiente dice «Enviando aviso…». Esta notificación es el aviso CoDi al cliente, no un anuncio de la PWA cerrada.
+
 ## 1. Principios UX
 
 1. **Cobrar antes que administrar:** el acceso principal inicia un cobro; lo demás es secundario.
@@ -136,8 +138,9 @@
 3. Transcripción original **si proviene de voz**; omitirla si origen manual.
 4. Acción principal **Confirmar importe**.
 5. Opciones secundarias **Corregir importe**, **Volver a hablar**, **Cancelar**.
+6. **Forma de cobro**, antes de confirmar: «Código QR» marcado, o «Notificación» con el celular de 10 dígitos.
 
-La corrección manual usa campo dentro de P02; validación visible y CTA deshabilitado durante petición en curso. Sin barra inferior.
+La corrección manual usa campo dentro de P02; validación visible y CTA deshabilitado durante petición en curso. Sin barra inferior. Con notificación, confirmar permanece deshabilitado hasta que el celular tiene 10 dígitos.
 
 ### P03 — Cobro CoDi (aprobado v1.0)
 
@@ -145,8 +148,8 @@ La corrección manual usa campo dentro de P02; validación visible y CTA deshabi
 
 | Estado | Contenido indispensable | Acciones |
 |---|---|---|
-| Generando QR | Importe, indicador de carga, aviso «Generando código» | Evitar doble envío; cancelación segura si aplica |
-| Esperando pago | QR **real**, importe, referencia y tiempo restante | Consultar nuevamente / Cerrar cobro |
+| Generando QR | Importe, indicador de carga, aviso «Generando código». Con notificación: «Enviando aviso…» | Evitar doble envío; cancelación segura si aplica |
+| Esperando pago | QR **real**, importe, referencia y tiempo restante. Con notificación: los últimos 4 dígitos y ningún código | Consultar nuevamente / Cerrar cobro |
 | Verificación no disponible | QR/contexto cuando existe, mensaje explícito de incertidumbre | Consultar nuevamente / Cerrar cobro según estado |
 | Pagado | Éxito persistente, importe, referencia | **Nuevo cobro** / Ver detalle |
 | Expirado | Importe, estado, referencia, aclaración de posible pago tardío | Nuevo cobro con intención nueva / Ver detalle |
@@ -284,8 +287,8 @@ Los tokens y estilo concreto se detallan en `DESIGN.md` (guía nueva de implemen
 
 ## 10. Exclusiones, cambios y handoff
 
-No añadir por iniciativa propia: onboarding largo, cuentas multiusuario, dashboards analíticos, filtros o gráficos, otras pasarelas, navegación adicional, asistente conversacional o notificaciones push. Mantener **P01–P04 y A01–A03**, **UF-01–UF-07**.
+No añadir por iniciativa propia: onboarding largo, cuentas multiusuario, dashboards analíticos, filtros o gráficos, otras pasarelas, navegación adicional, asistente conversacional o anuncios con la PWA cerrada. La notificación CoDi al cliente forma parte de P02 y P03. Mantener **P01–P04 y A01–A03**, **UF-01–UF-07**.
 
-**Control de cambios:** esta UX Specification v1.0 está congelada. Cualquier cambio estructural debe proponerse por escrito y recibir aprobación explícita antes de implementarse.
+**Control de cambios:** esta UX Specification v1.0 está congelada. Cualquier cambio estructural debe proponerse por escrito y recibir aprobación explícita antes de implementarse. El cambio del 2026-11-18 agrega la forma de cobro en P02 y la espera sin código en P03.
 
 **Handoff:** el equipo/IA debe leer primero el PRD, después esta UX Specification, la Architecture Specification y finalmente `DESIGN.md` y `IMPLEMENTATION_PLAN.md`.

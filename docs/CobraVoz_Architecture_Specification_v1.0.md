@@ -8,6 +8,8 @@
 
 > Este archivo consolida los seis bloques técnicos aprobados (3.1–3.6). Los nombres de rutas y estructuras son contratos de implementación propuestos dentro de la arquitectura aprobada. Los detalles de respuesta exactos de Pey deben cotejarse con su documentación vigente antes de programar la integración productiva.
 
+> **Cambio 2026-11-18.** El cobro puede ser un QR, que sigue como default, o una notificación CoDi. El contrato de Pey está en `adapters/pey/README.md`. La sección 17 registra el modelo. No reabre el anuncio al comerciante con la PWA cerrada.
+
 ## 1. ADR y decisiones congeladas
 
 | ADR | Decisión | Razón |
@@ -21,7 +23,7 @@
 | ADR-07 | OpenAI `gpt-transcribe` inicial, sustituible si fallan pruebas | STT desacoplado |
 | ADR-08 | Parser determinista en TS | Importe verificable, sin inferencia probabilística monetaria |
 | ADR-09 | Web Speech Synthesis API para anuncios `es-MX` | No introducir un TTS remoto para MVP |
-| ADR-10 | Pey / CoDi, QR generado en backend, webhooks firmados | Cobro bancario verificable |
+| ADR-10 | Pey / CoDi. El backend genera el QR o envía la notificación; webhooks firmados | Cobro bancario verificable |
 | ADR-11 | Vercel + Supabase para producción | Infraestructura administrada |
 | ADR-12 | Polling controlado del estado; no WebSockets | Complejidad mínima |
 | ADR-13 | Supabase Cron (`pg_cron` + `pg_net`) llama cada 5 minutos a `GET /api/internal/reconcile` | Vercel Hobby solo permite un cron al día; el secreto vive en Vault |
@@ -280,3 +282,14 @@ Contrato cotejado el 2026-11-16 con el OpenAPI de Pey del 2026-10-20. En el QR r
 ## 16. Control de cambios
 
 **Architecture Specification v1.0 APROBADA Y CONGELADA.** Modificar stack, cardinalidades de datos, reglas de pagos, seguridad o procesos de reconciliación exige aprobación explícita y versión nueva. `DESIGN.md` solo gobierna la representación visual; `IMPLEMENTATION_PLAN.md` solo ordena la ejecución técnica.
+
+El cambio del 2026-11-18 agrega la notificación como segundo instrumento. El cron, el webhook y la regla del centavo no cambian.
+
+## 17. Cobro por notificación
+
+- `charges.collection_method` es `qr` o `pn`. En `pn`, el cobro guarda el SHA-256 del celular de 10 dígitos y los últimos 4. El número completo no se persiste ni sale en el DTO.
+- `codi_notifications` existe solo cuando `POST /codi/pn` respondió 200 con `transactionId` y `codiId`. `charge_id` es único. Si la creación queda incierta, no hay fila y no se reintenta.
+- `payments` apunta a `codi_qr_id` o a `codi_notification_id`, exactamente uno.
+- El webhook sigue siendo uno por clave. `codi.pn.payment_received` se casa por `transactionId`. Un id desconocido no crea un cobro.
+- La conciliación del aviso usa `GET /transaction/:transactionId`. El mismo cron de Supabase llama al mismo `GET /api/internal/reconcile`.
+- El total del día incluye ambos instrumentos y suma `payments.amount_cents`, el dinero recibido.
