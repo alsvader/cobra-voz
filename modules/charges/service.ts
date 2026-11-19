@@ -5,15 +5,18 @@ import {
   codiNotifications,
   codiQrs,
   paymentIncidents,
+  paymentLinks,
   merchants,
 } from "@/adapters/db/schema";
 import { canonicalCodiId } from "@/adapters/pey/contract";
 import { isSimulatedQr } from "@/adapters/pey/mock";
 import type {
+  CreatePaymentLinkOutcome,
   CreatePushOutcome,
   CreateQrOutcome,
   PeyAdapter,
 } from "@/adapters/pey/types";
+import { paymentLinkReturnUrls } from "./return-urls";
 import { phoneHash } from "./phone-hash";
 import { normalizeMxPhone, phoneLast4 } from "./phone";
 import {
@@ -55,16 +58,32 @@ const MAX_NUM_REF_ATTEMPTS = 10;
 
 type ChargeRow = typeof charges.$inferSelect;
 type QrRow = typeof codiQrs.$inferSelect;
+type LinkRow = typeof paymentLinks.$inferSelect;
 
-function toDto(charge: ChargeRow, qr: QrRow | null): ChargeDto {
+function methodOf(value: string): ChargeDto["collectionMethod"] {
+  if (value === "pn" || value === "link") return value;
+  return "qr";
+}
+
+function toDto(
+  charge: ChargeRow,
+  qr: QrRow | null,
+  link: LinkRow | null = null,
+): ChargeDto {
   return {
     id: charge.id,
     reference: chargeReference(charge.id),
     amountCents: charge.amountCents,
     currency: "MXN",
     status: charge.status,
-    collectionMethod: charge.collectionMethod === "pn" ? "pn" : "qr",
+    collectionMethod: methodOf(charge.collectionMethod),
     phoneLast4: charge.phoneLast4,
+    creationResult:
+      charge.creationResult === "uncertain" ||
+      charge.creationResult === "rejected"
+        ? charge.creationResult
+        : null,
+    paymentLink: link ? { url: link.url } : null,
     createdAt: charge.createdAt.toISOString(),
     expiresAt: charge.expiresAt?.toISOString() ?? null,
     closedAt: charge.closedAt?.toISOString() ?? null,
@@ -88,10 +107,12 @@ async function loadCharge(
       charge: charges,
       qr: codiQrs,
       notification: codiNotifications,
+      link: paymentLinks,
     })
     .from(charges)
     .leftJoin(codiQrs, eq(codiQrs.chargeId, charges.id))
     .leftJoin(codiNotifications, eq(codiNotifications.chargeId, charges.id))
+    .leftJoin(paymentLinks, eq(paymentLinks.chargeId, charges.id))
     .where(and(eq(charges.merchantId, merchantId), where))
     .limit(1);
   return row ?? null;
@@ -105,7 +126,11 @@ async function markUncertain(db: Database, chargeId: string, reason: string) {
   await db.transaction(async (tx) => {
     const updated = await tx
       .update(charges)
-      .set({ status: "qr_uncertain", updatedAt: new Date() })
+      .set({
+        status: "qr_uncertain",
+        creationResult: "uncertain",
+        updatedAt: new Date(),
+      })
       .where(and(eq(charges.id, chargeId), eq(charges.status, "created")))
       .returning({ id: charges.id });
 
@@ -120,6 +145,37 @@ async function markUncertain(db: Database, chargeId: string, reason: string) {
   // Solo identificadores: sin importes, cuentas ni secretos.
   console.warn(
     JSON.stringify({ event: "qr_creation_uncertain", chargeId, reason }),
+  );
+}
+
+/** Pey rechazó el enlace (HTTP 400). No existe y esta intención no se reintenta. */
+async function markRejected(db: Database, chargeId: string, errorType: string) {
+  const type = /^[A-Z_]{1,64}$/.test(errorType) ? errorType : "INVALID_REQUEST";
+  await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(charges)
+      .set({
+        status: "qr_uncertain",
+        creationResult: "rejected",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(charges.id, chargeId), eq(charges.status, "created")))
+      .returning({ id: charges.id });
+
+    if (updated.length > 0) {
+      await tx.insert(paymentIncidents).values({
+        chargeId,
+        type: "other",
+        reason: type,
+      });
+    }
+  });
+  console.warn(
+    JSON.stringify({
+      event: "payment_link_rejected",
+      chargeId,
+      errorType: type,
+    }),
   );
 }
 
@@ -158,7 +214,9 @@ async function settleCharge(
       charge.id,
       charge.collectionMethod === "pn"
         ? "La solicitud de notificación quedó sin resolver; no se sabe si Pey la envió."
-        : "La solicitud de QR quedó sin resolver; no se sabe si Pey la creó.",
+        : charge.collectionMethod === "link"
+          ? "La solicitud del enlace quedó sin resolver; no se sabe si Pey lo creó."
+          : "La solicitud de QR quedó sin resolver; no se sabe si Pey la creó.",
     );
   } else {
     await deps.db
@@ -305,8 +363,7 @@ export async function createCharge(
       // Imposible salvo borrado concurrente; se trata como error interno.
       throw new Error("Cobro idempotente no encontrado tras el conflicto.");
     }
-    const existingMethod =
-      existing.charge.collectionMethod === "pn" ? "pn" : "qr";
+    const existingMethod = methodOf(existing.charge.collectionMethod);
     if (
       existing.charge.amountCents !== input.amountCents ||
       existingMethod !== method ||
@@ -317,7 +374,7 @@ export async function createCharge(
     const settled = await settleCharge(deps, merchantId, existing);
     return {
       ok: true,
-      charge: toDto(settled.charge, settled.qr),
+      charge: toDto(settled.charge, settled.qr, settled.link),
       replayed: true,
     };
   }
@@ -326,7 +383,7 @@ export async function createCharge(
   const numRef = await pickNumRef(deps, now);
   const reference = chargeReference(inserted.id);
 
-  let outcome: CreateQrOutcome | CreatePushOutcome;
+  let outcome: CreateQrOutcome | CreatePushOutcome | CreatePaymentLinkOutcome;
   try {
     const request = {
       chargeId: inserted.id,
@@ -336,10 +393,19 @@ export async function createCharge(
       expirationSeconds: QR_EXPIRATION_SECONDS,
       bankAccountId: merchant.peyBankAccountId,
     };
-    outcome =
-      method === "pn"
-        ? await pey.createCodiPush({ ...request, phoneNumber: phone! })
-        : await pey.createCodiQr(request);
+    if (method === "link") {
+      outcome = await pey.createPaymentLink({
+        chargeId: inserted.id,
+        amountCents: inserted.amountCents,
+        expirationSeconds: QR_EXPIRATION_SECONDS,
+        ...paymentLinkReturnUrls(),
+      });
+    } else {
+      outcome =
+        method === "pn"
+          ? await pey.createCodiPush({ ...request, phoneNumber: phone! })
+          : await pey.createCodiQr(request);
+    }
   } catch {
     // Un adaptador que lanza se trata igual que un timeout: incierto.
     outcome = {
@@ -348,7 +414,7 @@ export async function createCharge(
     };
   }
 
-  if (outcome.status === "created") {
+  if (outcome.status === "created" && !("url" in outcome)) {
     const invalid =
       "qrString" in outcome
         ? validateCreated(outcome, now)
@@ -356,6 +422,20 @@ export async function createCharge(
     if (invalid) {
       outcome = { status: "uncertain", reason: invalid };
     }
+  }
+
+  if (outcome.status === "rejected") {
+    await markRejected(db, inserted.id, outcome.errorType);
+    const settled = await loadCharge(
+      db,
+      merchantId,
+      eq(charges.id, inserted.id),
+    );
+    return {
+      ok: true,
+      charge: toDto(settled!.charge, settled!.qr, settled!.link),
+      replayed: false,
+    };
   }
 
   if (outcome.status === "uncertain") {
@@ -367,14 +447,21 @@ export async function createCharge(
     );
     return {
       ok: true,
-      charge: toDto(settled!.charge, settled!.qr),
+      charge: toDto(settled!.charge, settled!.qr, settled!.link),
       replayed: false,
     };
   }
 
   try {
     await db.transaction(async (tx) => {
-      if ("qrString" in outcome) {
+      if ("url" in outcome) {
+        await tx.insert(paymentLinks).values({
+          chargeId: inserted.id,
+          peyPaymentLinkId: outcome.peyPaymentLinkId,
+          url: outcome.url,
+          expiresAt: outcome.expiresAt,
+        });
+      } else if ("qrString" in outcome) {
         await tx.insert(codiQrs).values({
           chargeId: inserted.id,
           peyQrId: outcome.peyQrId,
@@ -409,14 +496,16 @@ export async function createCharge(
       inserted.id,
       method === "pn"
         ? "Pey envió la notificación pero no se pudo persistir en CobraVoz."
-        : "Pey creó el QR pero no se pudo persistir en CobraVoz.",
+        : method === "link"
+          ? "Pey creó el enlace pero no se pudo persistir en CobraVoz."
+          : "Pey creó el QR pero no se pudo persistir en CobraVoz.",
     );
   }
 
   const settled = await loadCharge(db, merchantId, eq(charges.id, inserted.id));
   return {
     ok: true,
-    charge: toDto(settled!.charge, settled!.qr),
+    charge: toDto(settled!.charge, settled!.qr, settled!.link),
     replayed: false,
   };
 }
@@ -428,6 +517,8 @@ export type SettledCharge = {
   peyQrId: string | null;
   /** `transactionId` de la notificación. `null` si nunca se confirmó o es QR. */
   peyTransactionId: string | null;
+  /** Id del enlace en Pey. `null` si nunca se confirmó. */
+  peyPaymentLinkId: string | null;
 };
 
 /**
@@ -443,9 +534,10 @@ export async function loadSettledCharge(
   if (!found) return null;
   const settled = await settleCharge(deps, merchantId, found);
   return {
-    charge: toDto(settled.charge, settled.qr),
+    charge: toDto(settled.charge, settled.qr, settled.link),
     peyQrId: settled.qr?.peyQrId ?? null,
     peyTransactionId: settled.notification?.peyTransactionId ?? null,
+    peyPaymentLinkId: settled.link?.peyPaymentLinkId ?? null,
   };
 }
 
@@ -473,10 +565,16 @@ export async function findResumableCharge(
   merchantId: string,
 ): Promise<ChargeDto | null> {
   const rows = await deps.db
-    .select({ charge: charges, qr: codiQrs, notification: codiNotifications })
+    .select({
+      charge: charges,
+      qr: codiQrs,
+      notification: codiNotifications,
+      link: paymentLinks,
+    })
     .from(charges)
     .leftJoin(codiQrs, eq(codiQrs.chargeId, charges.id))
     .leftJoin(codiNotifications, eq(codiNotifications.chargeId, charges.id))
+    .leftJoin(paymentLinks, eq(paymentLinks.chargeId, charges.id))
     .where(
       and(
         eq(charges.merchantId, merchantId),
@@ -493,7 +591,7 @@ export async function findResumableCharge(
       settled.charge.status === "waiting_payment" ||
       settled.charge.status === "qr_uncertain"
     ) {
-      return toDto(settled.charge, settled.qr);
+      return toDto(settled.charge, settled.qr, settled.link);
     }
   }
   return null;
@@ -532,7 +630,7 @@ export async function closeCharge(
   if (settled.charge.status === "locally_closed") {
     return {
       ok: true,
-      charge: toDto(settled.charge, settled.qr),
+      charge: toDto(settled.charge, settled.qr, settled.link),
       alreadyClosed: true,
     };
   }
@@ -548,7 +646,7 @@ export async function closeCharge(
       const closed = await loadCharge(deps.db, merchantId, where);
       return {
         ok: true,
-        charge: toDto(closed!.charge, closed!.qr),
+        charge: toDto(closed!.charge, closed!.qr, closed!.link),
         alreadyClosed: false,
       };
     }
@@ -559,13 +657,13 @@ export async function closeCharge(
   if (current.charge.status === "locally_closed") {
     return {
       ok: true,
-      charge: toDto(current.charge, current.qr),
+      charge: toDto(current.charge, current.qr, current.link),
       alreadyClosed: true,
     };
   }
   return {
     ok: false,
     error: "not_closable",
-    charge: toDto(current.charge, current.qr),
+    charge: toDto(current.charge, current.qr, current.link),
   };
 }

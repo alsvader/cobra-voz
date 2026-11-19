@@ -8,6 +8,7 @@ import {
   merchants,
   paymentEvents,
   paymentIncidents,
+  paymentLinks,
   payments,
 } from "@/adapters/db/schema";
 import { createTestDb } from "@/adapters/db/testing";
@@ -118,6 +119,18 @@ afterEach(async () => {
       await db
         .delete(codiNotifications)
         .where(inArray(codiNotifications.id, noteIds));
+    }
+    const linkRows = await db
+      .select({ id: paymentLinks.id })
+      .from(paymentLinks)
+      .where(inArray(paymentLinks.chargeId, chargeIds));
+    const linkIds = linkRows.map((row) => row.id);
+    if (linkIds.length > 0) {
+      await db
+        .delete(paymentEvents)
+        .where(inArray(paymentEvents.paymentLinkId, linkIds));
+      await db.delete(payments).where(inArray(payments.paymentLinkId, linkIds));
+      await db.delete(paymentLinks).where(inArray(paymentLinks.id, linkIds));
     }
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
@@ -402,5 +415,52 @@ describe("reconcilePending", () => {
       .where(eq(charges.id, created.charge.id));
     expect(row.status).toBe("paid");
     expect(pey.queryCalls[0]).toMatch(/^mock-pn-/);
+  });
+
+  it("la pasada consulta un enlace y lo marca pagado", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const created = await createCharge({ db, pey }, merchant.id, {
+      amountCents: MOCK_QUERY_PAID_AMOUNT_CENTS,
+      idempotencyKey: randomUUID(),
+      method: "link",
+    });
+    if (!created.ok) throw new Error("setup");
+
+    const run = await reconcilePending(
+      { db, pey },
+      { merchantId: merchant.id },
+    );
+
+    expect(run).toMatchObject({ examined: 1, paid: 1 });
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, created.charge.id));
+    expect(row.status).toBe("paid");
+    expect(pey.queryCalls[0]).toMatch(/^mock-link-/);
+  });
+
+  it("un enlace que Pey no confirma no se marca pagado", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const created = await createCharge({ db, pey }, merchant.id, {
+      amountCents: MOCK_QUERY_UNAVAILABLE_AMOUNT_CENTS,
+      idempotencyKey: randomUUID(),
+      method: "link",
+    });
+    if (!created.ok) throw new Error("setup");
+
+    const run = await reconcilePending(
+      { db, pey },
+      { merchantId: merchant.id },
+    );
+
+    expect(run.unavailable).toBe(1);
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, created.charge.id));
+    expect(row.status).toBe("waiting_payment");
   });
 });

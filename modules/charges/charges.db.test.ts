@@ -7,6 +7,7 @@ import {
   codiQrs,
   merchants,
   paymentIncidents,
+  paymentLinks,
   payments,
 } from "@/adapters/db/schema";
 import { createTestDb } from "@/adapters/db/testing";
@@ -70,6 +71,18 @@ function adapterReturning(
         reason: "Esta prueba no consulta notificaciones.",
       };
     },
+    async createPaymentLink() {
+      return {
+        status: "rejected",
+        errorType: "INVALID_REQUEST",
+      };
+    },
+    async queryPaymentLink() {
+      return {
+        status: "unavailable",
+        reason: "Esta prueba no consulta enlaces.",
+      };
+    },
   };
   return { adapter, calls };
 }
@@ -119,6 +132,21 @@ afterEach(async () => {
       await db
         .delete(codiNotifications)
         .where(inArray(codiNotifications.chargeId, chargeIds));
+    }
+    const linkRows = await db
+      .select({ id: paymentLinks.id })
+      .from(paymentLinks)
+      .where(inArray(paymentLinks.chargeId, chargeIds));
+    if (linkRows.length > 0) {
+      await db.delete(payments).where(
+        inArray(
+          payments.paymentLinkId,
+          linkRows.map((row) => row.id),
+        ),
+      );
+      await db
+        .delete(paymentLinks)
+        .where(inArray(paymentLinks.chargeId, chargeIds));
     }
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
@@ -1077,5 +1105,150 @@ describe("createCharge — notificación", () => {
       .from(codiNotifications)
       .where(eq(codiNotifications.chargeId, first.charge.id));
     expect(notes).toHaveLength(0);
+  });
+});
+
+describe("createCharge — enlace", () => {
+  it("guarda el enlace con el importe capturado y sin teléfono", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const result = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15050,
+      idempotencyKey: newKey(),
+      method: "link",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.charge).toMatchObject({
+      status: "waiting_payment",
+      collectionMethod: "link",
+      phoneLast4: null,
+      qr: null,
+    });
+    expect(result.charge.paymentLink?.url).toMatch(
+      /^https:\/\/app\.mipey\.mx\/payment-link\//,
+    );
+    expect(JSON.stringify(result.charge)).not.toContain("peyPaymentLinkId");
+    expect(pey.linkCalls).toHaveLength(1);
+    expect(pey.linkCalls[0].amountCents).toBe(15050);
+    expect(pey.linkCalls[0].successUrl).toContain("/enlace/pago-completado");
+    expect(pey.linkCalls[0].backUrl).toContain("/enlace/pago-cancelado");
+    expect(pey.calls).toHaveLength(0);
+    expect(pey.pushCalls).toHaveLength(0);
+
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, result.charge.id));
+    expect(row.phoneHash).toBeNull();
+    const links = await db
+      .select()
+      .from(paymentLinks)
+      .where(eq(paymentLinks.chargeId, result.charge.id));
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe(result.charge.paymentLink?.url);
+  });
+
+  it("repetir la misma intención no crea otro enlace; otra forma sí choca", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const idempotencyKey = newKey();
+    const input = {
+      amountCents: 15050,
+      idempotencyKey,
+      method: "link" as const,
+    };
+    const first = await createCharge({ db, pey }, merchant.id, input);
+    const second = await createCharge({ db, pey }, merchant.id, input);
+    const conflict = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15050,
+      idempotencyKey,
+      method: "qr",
+    });
+
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(second.replayed).toBe(true);
+    expect(second.charge.id).toBe(first.charge.id);
+    expect(pey.linkCalls).toHaveLength(1);
+    expect(conflict).toEqual({ ok: false, error: "idempotency_conflict" });
+  });
+
+  it("un rechazo de Pey no crea el enlace y no se reintenta", async () => {
+    const merchant = await newMerchant();
+    let calls = 0;
+    const adapter: PeyAdapter = {
+      kind: "mock",
+      async createCodiQr() {
+        throw new Error("esta prueba no crea QR");
+      },
+      async queryCodiQrPayments() {
+        return { status: "unavailable", reason: "no" };
+      },
+      async createCodiPush() {
+        return { status: "uncertain", reason: "no" };
+      },
+      async queryCodiPushPayment() {
+        return { status: "unavailable", reason: "no" };
+      },
+      async createPaymentLink() {
+        calls += 1;
+        return { status: "rejected", errorType: "INVALID_AMOUNT" };
+      },
+      async queryPaymentLink() {
+        return { status: "unavailable", reason: "no" };
+      },
+    };
+    const input = {
+      amountCents: 15050,
+      idempotencyKey: newKey(),
+      method: "link" as const,
+    };
+    const first = await createCharge({ db, pey: adapter }, merchant.id, input);
+    const retry = await createCharge({ db, pey: adapter }, merchant.id, input);
+
+    expect(first.ok && retry.ok).toBe(true);
+    if (!first.ok || !retry.ok) return;
+    expect(first.charge.status).toBe("qr_uncertain");
+    expect(first.charge.creationResult).toBe("rejected");
+    expect(first.charge.paymentLink).toBeNull();
+    expect(retry.replayed).toBe(true);
+    expect(calls).toBe(1);
+    const links = await db
+      .select()
+      .from(paymentLinks)
+      .where(eq(paymentLinks.chargeId, first.charge.id));
+    expect(links).toHaveLength(0);
+    const incidents = await db
+      .select()
+      .from(paymentIncidents)
+      .where(eq(paymentIncidents.chargeId, first.charge.id));
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0].reason).toBe("INVALID_AMOUNT");
+  });
+
+  it("un timeout no reintenta el enlace", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const input = {
+      amountCents: 1301,
+      idempotencyKey: newKey(),
+      method: "link" as const,
+    };
+    const first = await createCharge({ db, pey }, merchant.id, input);
+    const retry = await createCharge({ db, pey }, merchant.id, input);
+
+    expect(first.ok && retry.ok).toBe(true);
+    if (!first.ok || !retry.ok) return;
+    expect(first.charge.status).toBe("qr_uncertain");
+    expect(first.charge.creationResult).toBe("uncertain");
+    expect(retry.replayed).toBe(true);
+    expect(pey.linkCalls).toHaveLength(1);
+    const links = await db
+      .select()
+      .from(paymentLinks)
+      .where(eq(paymentLinks.chargeId, first.charge.id));
+    expect(links).toHaveLength(0);
   });
 });

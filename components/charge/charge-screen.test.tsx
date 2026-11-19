@@ -203,6 +203,41 @@ describe("ChargeView — variantes por estado persistido", () => {
     expect(screen.queryByTestId("codi-qr")).not.toBeInTheDocument();
   });
 
+  it("esperando un enlace muestra la URL para copiar y no abre el pago", () => {
+    view(
+      chargeWith("waiting_payment", {
+        collectionMethod: "link",
+        qr: null,
+        paymentLink: { url: "https://app.mipey.mx/payment-link/01LINK" },
+      }),
+      60_000,
+    );
+
+    expect(
+      screen.getByText("https://app.mipey.mx/payment-link/01LINK"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Copiar enlace" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /mipey/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("codi-qr")).not.toBeInTheDocument();
+  });
+
+  it("un enlace rechazado no invita a reintentar", () => {
+    view(
+      chargeWith("qr_uncertain", {
+        collectionMethod: "link",
+        creationResult: "rejected",
+      }),
+    );
+
+    expect(screen.getByText("No pudimos crear el enlace")).toBeInTheDocument();
+    expect(
+      screen.getByText(/no repetiremos la solicitud/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("esperando pago sin QR registrado no inventa uno", () => {
     view({ ...chargeWith("waiting_payment"), qr: null }, 60_000);
 

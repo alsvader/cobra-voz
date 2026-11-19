@@ -35,7 +35,7 @@ describe("parsePeyPaymentNotice", () => {
     });
 
     expect(parsed.ok).toBe(true);
-    if (!parsed.ok) return;
+    if (!parsed.ok || parsed.notice.kind !== "qr") return;
     expect(parsed.notice.amountCents).toBe(1);
     expect(parsed.notice.numRef).toBe(34567);
     expect(parsed.notice.paidAt).toEqual(new Date(1790724818 * 1000));
@@ -61,6 +61,41 @@ describe("parsePeyPaymentNotice", () => {
     expect(parsed.notice.amountCents).toBe(1);
     expect(parsed.notice.numRef).toBe(4567);
     expect(parsed.notice.chargeId).toBe("5f0d9f0e-8c3a-4e0e-9d7e-0c1f7c8c2a11");
+  });
+
+  it("un enlace pagado usa la base para el cobro y el total liquidado", () => {
+    const parsed = parsePeyPaymentNotice({
+      type: "payment_link.status_updated",
+      paymentLinkId: "01LINK",
+      status: "paid",
+      clientReferenceId: "5f0d9f0e-8c3a-4e0e-9d7e-0c1f7c8c2a11",
+      transactions: [
+        {
+          transactionId: "01TX",
+          amount: 118.5,
+          datePaid: 1790724818,
+          amountBreakdown: { base: 100, tip: 15, fee: 3.5 },
+        },
+      ],
+    });
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.notice.kind !== "link") return;
+    expect(parsed.notice.settles).toBe(true);
+    expect(parsed.notice.amountCents).toBe(11850);
+    expect(parsed.notice.baseCents).toBe(10000);
+    expect(parsed.notice.chargeId).toBe("5f0d9f0e-8c3a-4e0e-9d7e-0c1f7c8c2a11");
+  });
+
+  it("un enlace pendiente no cierra el cobro", () => {
+    const parsed = parsePeyPaymentNotice({
+      type: "payment_link.status_updated",
+      paymentLinkId: "01LINK",
+      status: "pending",
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.notice.kind !== "link") return;
+    expect(parsed.notice.settles).toBe(false);
   });
 
   it("rechaza un tipo distinto, un importe vacío y centavos de más", () => {

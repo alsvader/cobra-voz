@@ -53,8 +53,14 @@ export const charges = pgTable(
      * en cada pasada del cron.
      */
     lastReconciliationAt: timestamptz("last_reconciliation_at"),
-    /** `qr` muestra un código. `pn` envía el aviso al celular. */
+    /** `qr` muestra un código. `pn` envía el aviso. `link` crea un enlace. */
     collectionMethod: text("collection_method").notNull().default("qr"),
+    /**
+     * `uncertain`: no se sabe si Pey creó el instrumento.
+     * `rejected`: Pey respondió 400 y el enlace no existe.
+     * Vacío cuando la creación no falló.
+     */
+    creationResult: text("creation_result"),
     /**
      * SHA-256 del celular de 10 dígitos. Sirve para rechazar un reintento
      * con otro número. El número completo no se guarda.
@@ -85,12 +91,12 @@ export const charges = pgTable(
     ),
     check(
       "charges_collection_method",
-      sql`${table.collectionMethod} in ('qr', 'pn')`,
+      sql`${table.collectionMethod} in ('qr', 'pn', 'link')`,
     ),
     check(
       "charges_phone_matches_method",
       sql`(
-        ${table.collectionMethod} = 'qr'
+        ${table.collectionMethod} in ('qr', 'link')
         AND ${table.phoneHash} IS NULL
         AND ${table.phoneLast4} IS NULL
       ) OR (
@@ -98,6 +104,10 @@ export const charges = pgTable(
         AND ${table.phoneHash} ~ '^[0-9a-f]{64}$'
         AND ${table.phoneLast4} ~ '^[0-9]{4}$'
       )`,
+    ),
+    check(
+      "charges_creation_result",
+      sql`${table.creationResult} IS NULL OR ${table.creationResult} in ('uncertain', 'rejected')`,
     ),
   ],
 ).enableRLS();
@@ -174,9 +184,36 @@ export const codiNotifications = pgTable(
 ).enableRLS();
 
 /**
- * Movimiento bancario externo. Apunta a un QR o a una notificación, nunca a
- * los dos. `paid_at` es el instante real del pago; `recorded_at` es cuándo lo
- * persistió CobraVoz: los totales usan `paid_at`.
+ * Enlace de pago. Existe una fila solo cuando Pey respondió 200 con `id` y
+ * `url`. Si la creación quedó incierta o Pey la rechazó, el cobro no tiene
+ * fila aquí y no se reintenta. `charge_id` único = 1:0..1 con el cobro.
+ */
+export const paymentLinks = pgTable(
+  "payment_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chargeId: uuid("charge_id")
+      .notNull()
+      .unique("payment_links_charge_id_key")
+      .references(() => charges.id, { onDelete: "restrict" }),
+    /** ULID que Pey devuelve al crear y que el webhook repite. */
+    peyPaymentLinkId: text("pey_payment_link_id")
+      .notNull()
+      .unique("payment_links_pey_payment_link_id_key"),
+    /** Dirección https donde el cliente paga. */
+    url: text("url").notNull(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    check("payment_links_url_https", sql`${table.url} ~ '^https://'`),
+  ],
+).enableRLS();
+
+/**
+ * Movimiento bancario externo. Apunta a un QR, a una notificación o a un
+ * enlace, nunca a más de uno. `paid_at` es el instante real del pago;
+ * `recorded_at` es cuándo lo persistió CobraVoz: los totales usan `paid_at`.
  */
 export const payments = pgTable(
   "payments",
@@ -187,6 +224,10 @@ export const payments = pgTable(
     }),
     codiNotificationId: uuid("codi_notification_id").references(
       (): AnyPgColumn => codiNotifications.id,
+      { onDelete: "restrict" },
+    ),
+    paymentLinkId: uuid("payment_link_id").references(
+      (): AnyPgColumn => paymentLinks.id,
       { onDelete: "restrict" },
     ),
     provider: text("provider").notNull().default("pey"),
@@ -209,6 +250,7 @@ export const payments = pgTable(
     ),
     index("payments_codi_qr_id_idx").on(table.codiQrId),
     index("payments_codi_notification_id_idx").on(table.codiNotificationId),
+    index("payments_payment_link_id_idx").on(table.paymentLinkId),
     index("payments_paid_at_idx").on(table.paidAt),
     index("payments_reconciliation_status_idx").on(table.reconciliationStatus),
     check("payments_amount_cents_positive", sql`${table.amountCents} > 0`),
@@ -219,9 +261,17 @@ export const payments = pgTable(
     check(
       "payments_one_instrument",
       sql`(
-        ${table.codiQrId} IS NOT NULL AND ${table.codiNotificationId} IS NULL
+        ${table.codiQrId} IS NOT NULL
+        AND ${table.codiNotificationId} IS NULL
+        AND ${table.paymentLinkId} IS NULL
       ) OR (
-        ${table.codiQrId} IS NULL AND ${table.codiNotificationId} IS NOT NULL
+        ${table.codiQrId} IS NULL
+        AND ${table.codiNotificationId} IS NOT NULL
+        AND ${table.paymentLinkId} IS NULL
+      ) OR (
+        ${table.codiQrId} IS NULL
+        AND ${table.codiNotificationId} IS NULL
+        AND ${table.paymentLinkId} IS NOT NULL
       )`,
     ),
   ],
@@ -254,6 +304,9 @@ export const paymentEvents = pgTable(
       () => codiNotifications.id,
       { onDelete: "restrict" },
     ),
+    paymentLinkId: uuid("payment_link_id").references(() => paymentLinks.id, {
+      onDelete: "restrict",
+    }),
     paymentId: uuid("payment_id").references(() => payments.id, {
       onDelete: "restrict",
     }),
@@ -273,6 +326,7 @@ export const paymentEvents = pgTable(
     index("payment_events_codi_notification_id_idx").on(
       table.codiNotificationId,
     ),
+    index("payment_events_payment_link_id_idx").on(table.paymentLinkId),
     index("payment_events_processing_status_idx").on(table.processingStatus),
   ],
 ).enableRLS();

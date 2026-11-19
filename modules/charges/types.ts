@@ -19,10 +19,17 @@ export type ChargeDto = {
   amountCents: number;
   currency: "MXN";
   status: ChargeStatus;
-  /** `qr` muestra un código. `pn` envió el aviso a un celular. */
-  collectionMethod: "qr" | "pn";
+  /** `qr` muestra un código. `pn` envió el aviso. `link` creó un enlace. */
+  collectionMethod: "qr" | "pn" | "link";
   /** Últimos 4 dígitos cuando el cobro es por notificación. */
   phoneLast4: string | null;
+  /**
+   * `rejected`: Pey respondió 400 y el enlace no existe.
+   * `uncertain`: no se sabe si Pey creó el instrumento.
+   */
+  creationResult?: "uncertain" | "rejected" | null;
+  /** Enlace para copiar. Solo cuando Pey lo confirmó. */
+  paymentLink?: { url: string } | null;
   createdAt: string;
   expiresAt: string | null;
   closedAt: string | null;

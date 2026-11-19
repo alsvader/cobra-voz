@@ -9,6 +9,10 @@ export const ROUTES = {
   confirmAmount: "/cobro/confirmar",
   /** P04 Ventas y A03 Detalle (`/ventas/[id]`). */
   sales: "/ventas",
+  /** El cliente llega aquí después de pagar un enlace. No marca el cobro. */
+  paymentLinkPaid: "/enlace/pago-completado",
+  /** El cliente llega aquí si cancela o regresa del enlace. */
+  paymentLinkCancelled: "/enlace/pago-cancelado",
 } as const;
 
 /** P03 — Cobro CoDi de un cobro concreto. */

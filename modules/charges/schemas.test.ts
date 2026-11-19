@@ -75,6 +75,26 @@ describe("createChargeSchema", () => {
     ).toBe(false);
   });
 
+  it("acepta un enlace y rechaza que traiga celular", () => {
+    const ok = createChargeSchema.safeParse({
+      amountCents: 100,
+      idempotencyKey: key,
+      method: "link",
+    });
+    expect(ok.success).toBe(true);
+    if (!ok.success) return;
+    expect(ok.data.method).toBe("link");
+    expect(ok.data.phoneNumber).toBeNull();
+    expect(
+      createChargeSchema.safeParse({
+        amountCents: 100,
+        idempotencyKey: key,
+        method: "link",
+        phoneNumber: "5512345678",
+      }).success,
+    ).toBe(false);
+  });
+
   it("rechaza cuerpos que no son objeto", () => {
     for (const body of [undefined, null, "x", 5, []]) {
       expect(createChargeSchema.safeParse(body).success).toBe(false);

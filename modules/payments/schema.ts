@@ -49,11 +49,35 @@ type NoticeCore = {
 
 export type PeyPaymentNotice =
   | (NoticeCore & { kind: "qr"; codiQrId: string })
-  | (NoticeCore & { kind: "pn" });
+  | (NoticeCore & { kind: "pn" })
+  | {
+      kind: "link";
+      paymentLinkId: string;
+      /** Solo `paid` con una transacción usable cierra el cobro. */
+      settles: boolean;
+      transactionId: string | null;
+      /** Dinero liquidado. `0` cuando el aviso no trae una transacción. */
+      amountCents: number;
+      /** Base del desglose, para compararla con el importe del cobro. */
+      baseCents: number;
+      paidAt: Date;
+      chargeId: string | null;
+    };
+
+const linkNoticeSchema = z.object({
+  type: z.literal("payment_link.status_updated"),
+  paymentLinkId: z.string().trim().min(1).max(128),
+  status: z.enum(["pending", "processing", "paid", "partial"]),
+  clientReferenceId: z.string().trim().min(1).max(255).optional(),
+  transactions: z.array(z.unknown()).optional(),
+});
 
 export function parsePeyPaymentNotice(
   body: unknown,
 ): { ok: true; notice: PeyPaymentNotice } | { ok: false } {
+  const link = linkNoticeSchema.safeParse(body);
+  if (link.success) return { ok: true, notice: linkNoticeOf(link.data, body) };
+
   const qr = qrNoticeSchema.safeParse(body);
   const push = qr.success ? null : pushNoticeSchema.safeParse(body);
   const parsed = qr.success ? qr : push;
@@ -82,6 +106,66 @@ export function parsePeyPaymentNotice(
     };
   }
   return { ok: true, notice: { kind: "pn", ...core } };
+}
+
+function linkNoticeOf(
+  data: z.infer<typeof linkNoticeSchema>,
+  body: unknown,
+): Extract<PeyPaymentNotice, { kind: "link" }> {
+  const transaction =
+    data.status === "paid" ? readSettledTransaction(data.transactions?.[0]) : null;
+  const reference = data.clientReferenceId ?? readExternalChargeId(body);
+  return {
+    kind: "link",
+    paymentLinkId: data.paymentLinkId,
+    settles: transaction != null,
+    transactionId: transaction?.transactionId ?? null,
+    amountCents: transaction?.amountCents ?? 0,
+    baseCents: transaction?.baseCents ?? 0,
+    paidAt: transaction?.paidAt ?? new Date(0),
+    chargeId: reference,
+  };
+}
+
+function readSettledTransaction(item: unknown): {
+  transactionId: string;
+  amountCents: number;
+  baseCents: number;
+  paidAt: Date;
+} | null {
+  if (!item || typeof item !== "object") return null;
+  const record = item as {
+    transactionId?: unknown;
+    amount?: unknown;
+    datePaid?: unknown;
+    paidAt?: unknown;
+    amountBreakdown?: unknown;
+  };
+  if (typeof record.transactionId !== "string") return null;
+  const transactionId = record.transactionId.trim();
+  if (!transactionId || transactionId.length > 128) return null;
+  const amountCents = noticeAmountCents(
+    typeof record.amount === "number" || typeof record.amount === "string"
+      ? record.amount
+      : "",
+  );
+  if (amountCents == null) return null;
+  const breakdown = record.amountBreakdown;
+  const baseRaw =
+    breakdown &&
+    typeof breakdown === "object" &&
+    ((breakdown as { base?: unknown }).base ?? null);
+  const baseCents =
+    typeof baseRaw === "number" || typeof baseRaw === "string"
+      ? noticeAmountCents(baseRaw)
+      : amountCents;
+  if (baseCents == null) return null;
+  const paidAt = noticePaidAt({
+    paidAt: typeof record.paidAt === "string" ? record.paidAt : undefined,
+    datePaid: typeof record.datePaid === "number" ? record.datePaid : undefined,
+  });
+  if (!paidAt) return null;
+  return { transactionId, amountCents, baseCents, paidAt };
 }
 
 function readExternalChargeId(body: unknown): string | null {

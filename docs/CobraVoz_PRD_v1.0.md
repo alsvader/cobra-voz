@@ -12,6 +12,8 @@
 
 > **Cambio 2026-11-18.** Al confirmar el importe el comerciante elige «Código QR» o «Notificación». El QR sigue siendo el default. La notificación pide un celular de 10 dígitos, sin lada; CobraVoz no guarda el número completo. Pey envía el aviso, el cliente lo paga en su app y el mismo webhook y la misma conciliación cierran el cobro. El banco sigue moviendo $0.01. El total del día incluye ese pago conciliado y suma el dinero recibido. El anuncio al comerciante con la PWA cerrada sigue fuera de alcance: no es esta notificación.
 
+> **Cambio 2026-11-18, enlace.** La tercera forma es «Enlace». No pide celular. Pey crea el enlace por el importe capturado; el centavo sigue solo en el QR y en la notificación. Un 400 cierra la intención porque el enlace no existe. Un 500 o un corte dejan la creación incierta y no se reintentan. El cliente regresa a páginas públicas que no marcan el cobro. El mismo webhook y la misma conciliación cierran el pago cuando la base coincide. El total del día suma el dinero liquidado. El anuncio con la PWA cerrada sigue fuera de alcance.
+
 ## 1. Resumen ejecutivo
 
 **CobraVoz** es una aplicación web instalable (PWA) para que pequeños comerciantes de México puedan cobrar por medio de CoDi usando la voz como entrada del importe. El comerciante dicta una cantidad, revisa y confirma lo reconocido, presenta un QR real o envía una notificación al celular del cliente mediante la API de Pey, recibe una confirmación visual y —si la aplicación está activa y el dispositivo lo permite— audible cuando el pago está verificado, y consulta sus ventas diarias e historial.

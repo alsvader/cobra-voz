@@ -10,6 +10,8 @@
 
 > **Cambio 2026-11-18.** El cobro puede ser un QR, que sigue como default, o una notificación CoDi. El contrato de Pey está en `adapters/pey/README.md`. La sección 17 registra el modelo. No reabre el anuncio al comerciante con la PWA cerrada.
 
+> **Cambio 2026-11-18, enlace.** La tercera forma es el enlace de pago. La sección 18 registra el modelo. El cron de Supabase no cambia. El centavo sigue solo en QR y notificación.
+
 ## 1. ADR y decisiones congeladas
 
 | ADR | Decisión | Razón |
@@ -287,9 +289,18 @@ El cambio del 2026-11-18 agrega la notificación como segundo instrumento. El cr
 
 ## 17. Cobro por notificación
 
-- `charges.collection_method` es `qr` o `pn`. En `pn`, el cobro guarda el SHA-256 del celular de 10 dígitos y los últimos 4. El número completo no se persiste ni sale en el DTO.
+- `charges.collection_method` es `qr`, `pn` o `link`. En `pn`, el cobro guarda el SHA-256 del celular de 10 dígitos y los últimos 4. El número completo no se persiste ni sale en el DTO.
 - `codi_notifications` existe solo cuando `POST /codi/pn` respondió 200 con `transactionId` y `codiId`. `charge_id` es único. Si la creación queda incierta, no hay fila y no se reintenta.
-- `payments` apunta a `codi_qr_id` o a `codi_notification_id`, exactamente uno.
+- `payments` apunta a exactamente uno de `codi_qr_id`, `codi_notification_id` o `payment_link_id`.
 - El webhook sigue siendo uno por clave. `codi.pn.payment_received` se casa por `transactionId`. Un id desconocido no crea un cobro.
 - La conciliación del aviso usa `GET /transaction/:transactionId`. El mismo cron de Supabase llama al mismo `GET /api/internal/reconcile`.
-- El total del día incluye ambos instrumentos y suma `payments.amount_cents`, el dinero recibido.
+- El total del día incluye los tres instrumentos y suma `payments.amount_cents`, el dinero recibido.
+
+## 18. Cobro por enlace
+
+- `POST /payment-link/create` envía el importe capturado. No se llama a `POST /payment-link/update`.
+- `payment_links` existe solo tras un 200 con `id` y `url` HTTPS. `charge_id` y `pey_payment_link_id` son únicos.
+- Un 400 deja `qr_uncertain` con `creation_result = rejected` y una incidencia `other` cuyo motivo es solo `error.type`. Un 500, un timeout o un 200 incompleto dejan `creation_result = uncertain`. Ninguno se reintenta.
+- `successUrl` y `backUrl` son páginas públicas. No viven bajo `/cobro` y no marcan el pago.
+- El webhook `payment_link.status_updated` se casa por `paymentLinkId`. Un id desconocido no crea un cobro. `pending`, `processing` y `partial` no cierran. `paid` cierra solo si `amountBreakdown.base` coincide con el importe del cobro. `payments.amount_cents` guarda el monto liquidado.
+- La conciliación usa `GET /payment-link/:id` en el mismo cron. Una consulta no disponible no marca pagado y no borra el cobro.

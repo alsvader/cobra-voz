@@ -26,6 +26,8 @@ describe("isPrivatePath", () => {
     expect(isPrivatePath("/")).toBe(false);
     expect(isPrivatePath("/acceso")).toBe(false);
     expect(isPrivatePath("/registro")).toBe(false);
+    expect(isPrivatePath("/enlace/pago-completado")).toBe(false);
+    expect(isPrivatePath("/enlace/pago-cancelado")).toBe(false);
     expect(isPrivatePath("/inicio-falso")).toBe(false);
   });
 });

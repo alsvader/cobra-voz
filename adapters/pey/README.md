@@ -8,12 +8,16 @@ createCodiQr(request): Promise<{ status: "created", peyQrId, qrString, expiresAt
                               | { status: "uncertain", reason }>
 createCodiPush(request): Promise<{ status: "created", transactionId, codiId, expiresAt }
                                  | { status: "uncertain", reason }>
+createPaymentLink(request): Promise<{ status: "created", peyPaymentLinkId, url, expiresAt }
+                                    | { status: "rejected", errorType }
+                                    | { status: "uncertain", reason }>
 ```
 
 - **Una sola llamada por intención.** No hay reintentos internos ni automáticos:
-  Pey no documenta idempotencia de creación ni cómo recuperar un QR o un aviso
-  sin id tras un timeout (Arquitectura §7 y §14). Todo lo que no sea un
-  instrumento real y completo es `uncertain`.
+  Pey no documenta idempotencia de creación ni cómo recuperar un QR, un aviso
+  o un enlace sin id tras un timeout (Arquitectura §7 y §14). Un 400 al crear
+  el enlace es `rejected`: no existe. Todo lo demás que no sea un instrumento
+  real y completo es `uncertain`.
 - **El adaptador nunca lanza** por resultados de negocio; si lo hiciera, el
   servicio lo trata como `uncertain`.
 
@@ -25,7 +29,7 @@ createCodiPush(request): Promise<{ status: "created", transactionId, codiId, exp
   simulador.
 - Su `qrString` empieza con `COBRAVOZ-MOCK|` y **no es un payload CoDi válido**;
   `isSimulatedQr()` permite rotularlo siempre como «QR de prueba».
-- Importes mágicos, iguales para QR y notificación: **$13.01**
+- Importes mágicos, iguales para QR, notificación y enlace: **$13.01**
   (`MOCK_UNCERTAIN_AMOUNT_CENTS`) simula un timeout al crear. **$13.02**
   responde pagado al consultar. **$13.03** simula que la consulta no responde.
   Cualquier otro importe se queda en espera.
@@ -85,3 +89,33 @@ El webhook es el mismo `POST /api/webhooks/pey`. El evento del aviso es
 `codiQrId`. Se casa con el `transactionId` guardado. Si
 `metadata.externalMetadata.chargeId` viene y no coincide, es incidencia. Un
 id desconocido no crea un cobro.
+
+## Enlace (`POST /payment-link/create`)
+
+El enlace cobra el importe capturado, no el centavo del QR ni de la notificación.
+Una sola llamada. No se usa `POST /payment-link/update`: otro importe es otro cobro.
+
+El cuerpo lleva `amount` > 0 como token decimal, `successUrl` y `backUrl` HTTPS,
+`hasTip: false`, `clientReferenceId` igual al id del cobro y
+`metadata.chargeId`. Esas dos direcciones salen de `NEXT_PUBLIC_APP_URL` más
+`/enlace/pago-completado` y `/enlace/pago-cancelado`. Si no son HTTPS, no se
+llama a Pey.
+
+- **200** con `id` y `url` HTTPS: se guarda `payment_links` y el cobro pasa a
+  `waiting_payment`.
+- **200** sin id o sin url usable: `uncertain`. No se reintenta.
+- **400**: `rejected`. El enlace no existe. Se guarda solo `error.type`, nunca
+  el mensaje libre. La intención queda cerrada.
+- **500**, timeout o red: `uncertain`. No se reintenta.
+
+`GET /payment-link/:id` es la consulta. `pending`, `processing` y `partial`
+dejan el cobro en espera. `paid` con una transacción cierra el cobro si
+`amountBreakdown.base` coincide con el importe capturado. La propina y la
+comisión no son un desajuste. `payments.amount_cents` guarda el dinero
+liquidado (`transaction.amount`). Un 400, 403, 404 o 500 de esa consulta es
+`unavailable`: no marca pagado y no borra el cobro.
+
+El webhook sigue siendo el mismo. El evento es `payment_link.status_updated`
+y se casa por `paymentLinkId`. Un id desconocido no crea un cobro. Si
+`clientReferenceId` viene y no es el cobro guardado, es incidencia. Un `paid`
+sin transacción usable se reconoce y no cierra el cobro.

@@ -15,6 +15,7 @@ import {
   codiNotifications,
   codiQrs,
   merchants,
+  paymentLinks,
 } from "@/adapters/db/schema";
 import type { PeyAdapter, QueriedPayment } from "@/adapters/pey/types";
 import { MAX_AMOUNT_CENTS } from "@/modules/charges/amount";
@@ -131,7 +132,11 @@ export async function reconcileCharge(
     };
   }
 
-  if (!settled.peyQrId && !settled.peyTransactionId) {
+  if (
+    !settled.peyQrId &&
+    !settled.peyTransactionId &&
+    !settled.peyPaymentLinkId
+  ) {
     return { ok: false, error: "not_reconcilable", charge: settled.charge };
   }
 
@@ -145,6 +150,10 @@ export async function reconcileCharge(
         queried: false,
       };
     }
+  }
+
+  if (settled.peyPaymentLinkId) {
+    return reconcileLink(deps, merchantId, chargeId, settled, now, options);
   }
 
   if (settled.peyTransactionId && !settled.peyQrId) {
@@ -168,6 +177,72 @@ export async function reconcileCharge(
   }
 
   return applyPayments(deps, merchantId, chargeId, settled, queried.payments);
+}
+
+async function reconcileLink(
+  deps: ReconcileDeps,
+  merchantId: string,
+  chargeId: string,
+  settled: SettledCharge,
+  now: Date,
+  options: { respectInterval?: boolean },
+): Promise<ReconcileChargeResult> {
+  const paymentLinkId = settled.peyPaymentLinkId;
+  if (!paymentLinkId) {
+    return { ok: false, error: "not_reconcilable", charge: settled.charge };
+  }
+
+  const queried = await deps.pey.queryPaymentLink(paymentLinkId);
+  if (!options.respectInterval) {
+    await stampAttempt(deps.db, chargeId, now);
+  }
+  if (queried.status === "unavailable") {
+    console.warn(
+      JSON.stringify({
+        event: "reconciliation_unavailable",
+        chargeId,
+        reason: queried.reason,
+      }),
+    );
+    return { ok: false, error: "unavailable", charge: settled.charge };
+  }
+
+  const transaction = queried.state === "paid" ? queried.transaction : null;
+  if (!transaction) {
+    const reloaded = await loadSettledCharge(deps, merchantId, chargeId);
+    return {
+      ok: true,
+      charge: reloaded?.charge ?? settled.charge,
+      outcome: "unchanged",
+      queried: true,
+    };
+  }
+
+  await recordPeyPayment(
+    deps,
+    queryEventId(transaction.transactionId.trim()),
+    {
+      kind: "link",
+      paymentLinkId,
+      settles: true,
+      transactionId: transaction.transactionId.trim(),
+      amountCents: transaction.amountCents,
+      baseCents: transaction.baseCents,
+      paidAt: transaction.paidAt,
+      chargeId: null,
+    },
+    { evidenceSource: "provider_query" },
+  );
+
+  const reloaded = await loadSettledCharge(deps, merchantId, chargeId);
+  const charge = reloaded?.charge ?? settled.charge;
+  const outcome =
+    charge.status === "paid"
+      ? "paid"
+      : charge.status === "incident"
+        ? "incident"
+        : "unchanged";
+  return { ok: true, charge, outcome, queried: true };
 }
 
 async function reconcilePush(
@@ -359,9 +434,14 @@ export async function reconcilePending(
     .from(charges)
     .leftJoin(codiQrs, eq(codiQrs.chargeId, charges.id))
     .leftJoin(codiNotifications, eq(codiNotifications.chargeId, charges.id))
+    .leftJoin(paymentLinks, eq(paymentLinks.chargeId, charges.id))
     .where(
       and(
-        or(isNotNull(codiQrs.id), isNotNull(codiNotifications.id)),
+        or(
+          isNotNull(codiQrs.id),
+          isNotNull(codiNotifications.id),
+          isNotNull(paymentLinks.id),
+        ),
         options.merchantId
           ? eq(charges.merchantId, options.merchantId)
           : undefined,

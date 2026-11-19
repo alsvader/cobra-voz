@@ -2,6 +2,7 @@ import Link from "next/link";
 import { LoaderCircle } from "lucide-react";
 import { AmountDisplay } from "@/components/charge/amount-display";
 import { CoDiQrCard } from "@/components/charge/codi-qr-card";
+import { PaymentLinkCard } from "@/components/charge/payment-link-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { ROUTES, salePath } from "@/lib/routes";
@@ -87,12 +88,16 @@ export function ChargeView({
             label={
               charge.collectionMethod === "pn"
                 ? "Enviando aviso"
-                : "Generando QR"
+                : charge.collectionMethod === "link"
+                  ? "Creando enlace"
+                  : "Generando QR"
             }
           >
             {charge.collectionMethod === "pn"
               ? "Estamos enviando el aviso. Todavía no hay nada que cobrar: no cierres esta pantalla."
-              : "Estamos generando el código. Todavía no hay nada que cobrar: no cierres esta pantalla."}
+              : charge.collectionMethod === "link"
+                ? "Estamos creando el enlace. Todavía no hay nada que cobrar: no cierres esta pantalla."
+                : "Estamos generando el código. Todavía no hay nada que cobrar: no cierres esta pantalla."}
           </Notice>
           {heading}
           {referenceLine}
@@ -113,13 +118,20 @@ export function ChargeView({
           <Notice tone="warning" label="Esperando pago">
             {charge.collectionMethod === "pn"
               ? `Le enviamos el cobro al celular${charge.phoneLast4 ? ` terminado en ${charge.phoneLast4}` : ""}. Tu cliente lo acepta en su app bancaria. Solo marcaremos «Pagado» cuando el banco lo confirme.`
-              : qr
-                ? "Pídele a tu cliente que escanee el código con su app bancaria. Solo marcaremos «Pagado» cuando el banco lo confirme."
-                : "No encontramos el código de este cobro. No cobres con él; vuelve a Inicio y crea un cobro nuevo."}
+              : charge.collectionMethod === "link"
+                ? charge.paymentLink
+                  ? "Comparte este enlace con tu cliente. No lo abras en este celular: el pago se hace en el suyo. Solo marcaremos «Pagado» cuando el banco lo confirme."
+                  : "No encontramos el enlace de este cobro. No lo compartas; vuelve a Inicio y crea un cobro nuevo."
+                : qr
+                  ? "Pídele a tu cliente que escanee el código con su app bancaria. Solo marcaremos «Pagado» cuando el banco lo confirme."
+                  : "No encontramos el código de este cobro. No cobres con él; vuelve a Inicio y crea un cobro nuevo."}
           </Notice>
           <Unavailable connection={connection} />
           {heading}
-          {qr && charge.collectionMethod !== "pn" ? (
+          {charge.collectionMethod === "link" && charge.paymentLink ? (
+            <PaymentLinkCard url={charge.paymentLink.url} />
+          ) : null}
+          {qr && charge.collectionMethod === "qr" ? (
             <CoDiQrCard
               payload={qr.payload}
               simulated={qr.simulated}
@@ -212,15 +224,9 @@ export function ChargeView({
         <Stack>
           <Notice
             tone="incident"
-            label={
-              charge.collectionMethod === "pn"
-                ? "No pudimos confirmar el aviso"
-                : "No pudimos confirmar el QR"
-            }
+            label={uncertainLabel(charge)}
           >
-            {charge.collectionMethod === "pn"
-              ? `No sabemos si se envió el aviso de ${amount}. Guarda la referencia. No se creó ningún cobro adicional y no repetiremos la solicitud por tu cuenta.`
-              : `No sabemos si se generó el código de ${amount}. Guarda la referencia. No se creó ningún cobro adicional y no repetiremos la solicitud por tu cuenta.`}
+            {uncertainCopy(charge, amount)}
           </Notice>
           {heading}
           {referenceLine}
@@ -244,6 +250,32 @@ export function ChargeView({
         </Stack>
       );
   }
+}
+
+function uncertainLabel(charge: ChargeDto): string {
+  if (charge.collectionMethod === "link") {
+    return charge.creationResult === "rejected"
+      ? "No pudimos crear el enlace"
+      : "No pudimos confirmar el enlace";
+  }
+  return charge.collectionMethod === "pn"
+    ? "No pudimos confirmar el aviso"
+    : "No pudimos confirmar el QR";
+}
+
+function uncertainCopy(charge: ChargeDto, amount: string): string {
+  const tail =
+    "Guarda la referencia. No se creó ningún cobro adicional y no repetiremos la solicitud por tu cuenta.";
+  if (charge.collectionMethod === "link" && charge.creationResult === "rejected") {
+    return `No se aceptó crear el enlace de ${amount}. ${tail}`;
+  }
+  if (charge.collectionMethod === "link") {
+    return `No sabemos si se creó el enlace de ${amount}. ${tail}`;
+  }
+  if (charge.collectionMethod === "pn") {
+    return `No sabemos si se envió el aviso de ${amount}. ${tail}`;
+  }
+  return `No sabemos si se generó el código de ${amount}. ${tail}`;
 }
 
 function Stack({ children }: { children: React.ReactNode }) {

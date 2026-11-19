@@ -53,11 +53,16 @@ Postgres local y meterlo en `drizzle/` rompería `db:migrate`.
 - **Notificación solo si Pey la confirmó:** `codi_notifications` existe cuando
   `POST /codi/pn` devolvió `transactionId` y `codiId`. `charge_id` es único.
   El celular completo no se guarda: `charges` lleva `collection_method`
-  (`qr` o `pn`), el SHA-256 del número y los últimos 4. Un QR deja esos dos
-  campos de teléfono en null.
-- **Un pago, un padre:** `payments` apunta a `codi_qr_id` o a
-  `codi_notification_id`, nunca a los dos y nunca a ninguno. El total del día
-  llega al cobro por cualquiera de los dos y suma `payments.amount_cents`.
+  (`qr`, `pn` o `link`), el SHA-256 del número y los últimos 4. Un QR o un
+  enlace dejan esos dos campos de teléfono en null.
+- **Enlace solo si Pey lo confirmó:** `payment_links` existe cuando
+  `POST /payment-link/create` respondió 200 con `id` y `url` HTTPS.
+  `charge_id` y `pey_payment_link_id` son únicos. Un 400 deja
+  `charges.creation_result = rejected` y no crea fila. Un resultado incierto
+  deja `creation_result = uncertain` y tampoco crea fila.
+- **Un pago, un padre:** `payments` apunta a `codi_qr_id`, a
+  `codi_notification_id` o a `payment_link_id`, exactamente uno. El total del
+  día llega al cobro por cualquiera de los tres y suma `payments.amount_cents`.
 - **Fechas:** todo `timestamptz` en UTC. `paid_at` (fecha efectiva) separado de
   `recorded_at`; la zona del comercio solo se aplica al consultar.
 - **Eventos:** solo se guardan entregas con **firma válida**; una firma
@@ -70,9 +75,9 @@ Postgres local y meterlo en `drizzle/` rompería `db:migrate`.
 
 | Estado            | Significado                                                       | Suma a ventas |
 | ----------------- | ----------------------------------------------------------------- | :-----------: |
-| `created`         | Intención persistida; aún sin QR ni aviso                         |      no       |
-| `qr_uncertain`    | **Interno.** Pey no confirmó el QR o el aviso. Sin reintento ciego |      no       |
-| `waiting_payment` | QR o notificación persistidos; «Esperando pago»                   |      no       |
+| `created`         | Intención persistida; aún sin QR, aviso ni enlace                 |      no       |
+| `qr_uncertain`    | **Interno.** Pey no confirmó el instrumento, o rechazó el enlace. Sin reintento ciego |      no       |
+| `waiting_payment` | QR, notificación o enlace persistidos; «Esperando pago»           |      no       |
 | `paid`            | Pago verificado y conciliado                                      |      sí       |
 | `expired`         | Venció la vigencia; aún puede recibir pago tardío                 |      no       |
 | `locally_closed`  | Cierre solo en CobraVoz; no cancela nada en el banco              |      no       |
@@ -83,19 +88,21 @@ de interfaz/comunicación. Las transiciones se implementan en PR-05 a PR-08.
 
 Implementadas hasta ahora (`modules/charges`, PR-05 y PR-06):
 
-- `created` → `waiting_payment`: solo con un QR real o una notificación
-  confirmada; la fila `codi_qrs` o `codi_notifications` y el estado se escriben
-  en la misma transacción.
+- `created` → `waiting_payment`: solo con un QR real, una notificación o un
+  enlace confirmados; la fila `codi_qrs`, `codi_notifications` o
+  `payment_links` y el estado se escriben en la misma transacción.
 - `created` → `qr_uncertain` (+ incidencia `qr_creation_uncertain` abierta): Pey
   no confirmó el instrumento, la respuesta no es válida o no pudo persistirse.
-  También si un cobro queda en `created` más de 60 s sin resolver.
+  También si un cobro queda en `created` más de 60 s sin resolver. Un 400 del
+  enlace usa el mismo estado, con `creation_result = rejected` y una incidencia
+  `other` cuyo motivo es solo el tipo de error.
 - `waiting_payment` → `expired`: el servidor lo aplica al leer el cobro cuando
   `expires_at <= ahora` (UPDATE condicional al estado). No equivale a «pago
   rechazado»; el instrumento y el cobro se conservan para un posible pago tardío.
 - `waiting_payment` → `locally_closed` (`closed_at` = ahora): «Cerrar cobro»,
   solo desde `waiting_payment` y con UPDATE condicional (si llegó un pago en
   paralelo, gana el pago). Cierre local: no cancela nada en el banco.
-- Nunca se reintenta la creación del QR ni del aviso por cuenta propia.
+- Nunca se reintenta la creación del QR, del aviso ni del enlace por cuenta propia.
 - `waiting_payment`, `expired`, `locally_closed` o `incident` → `paid`: solo con
   un pago conciliado (`payments.reconciliation_status = reconciled`) y
   `paid_payment_id` apuntando a él. Un pago tardío que coincide también entra
@@ -103,7 +110,8 @@ Implementadas hasta ahora (`modules/charges`, PR-05 y PR-06):
 - Esos mismos estados, salvo `paid`, → `incident` cuando el aviso firmado no
   coincide en importe, referencia o cuenta. El pago se guarda, pero no suma.
 - Un QR desconocido no crea cobro: solo el evento y una incidencia `unknown_qr`.
-  Una notificación desconocida tampoco crea cobro: la incidencia usa el tipo `other`.
+  Una notificación o un enlace desconocidos tampoco crean cobro: la incidencia
+  usa el tipo `other`.
 
 ## Seguridad
 

@@ -205,7 +205,7 @@ Evitar sombras dramáticas, gradientes fuertes, blur/transparencias tipo glassmo
 
 ### 6.4 `PaymentStatusCard`
 
-- Estados: generando QR, esperando pago, verificación no disponible, pagado, expirado, cerrado localmente, incidencia. Con notificación, el pendiente dice «Enviando aviso…» y la espera no muestra esta card de código: muestra los últimos 4 dígitos.
+- Estados: generando QR, esperando pago, verificación no disponible, pagado, expirado, cerrado localmente, incidencia. Con notificación, el pendiente dice «Enviando aviso…» y la espera no muestra esta card de código: muestra los últimos 4 dígitos. Con enlace, el pendiente dice «Creando enlace…» y la espera muestra la URL y «Copiar enlace», sin abrir el pago en este celular.
 - Card con ícono 24–32px + encabezado de estado legible + contexto corto; usa tokens de estado semánticos.
 - Éxito: check-circle, encabezado «¡Pago recibido!», importe/fecha y referencia.
 - Pendiente: clock o loader, encabezado «Esperando pago»/«Pago sin confirmar», no check verde.
@@ -274,8 +274,8 @@ Evitar sombras dramáticas, gradientes fuertes, blur/transparencias tipo glassmo
 | Vista | Orden visual y componentes | Prioridad |
 |---|---|---|
 | P01 Inicio | Header comercio + Settings; VoiceCaptureButton; acción manual; aviso pendiente condicional; DailySummary; movimientos recientes; BottomNav | Voz protagonista |
-| P02 Confirmación | Volver; AmountDisplay; transcripción; forma de cobro (QR marcado o notificación con celular); Primary «Confirmar importe»; Corregir/Volver a hablar/Cancelar | Importe legible y acción explícita. Con notificación, confirmar sigue deshabilitado hasta los 10 dígitos |
-| P03 CoDi | Estado actual; importe; QR real si existe, o últimos 4 si es notificación; referencia/expiración; acciones por estado | Claridad bancaria, nada de QR falso |
+| P02 Confirmación | Volver; AmountDisplay; transcripción; forma de cobro (QR marcado, notificación con celular, o enlace sin celular); Primary «Confirmar importe»; Corregir/Volver a hablar/Cancelar | Importe legible y acción explícita. Con notificación, confirmar sigue deshabilitado hasta los 10 dígitos |
+| P03 CoDi | Estado actual; importe; QR real si existe, últimos 4 si es notificación, o URL copiable si es enlace; referencia/expiración; acciones por estado | Claridad bancaria, nada de QR falso |
 | P04 Ventas | Header; DailySummary; movimientos en TransactionRow; cargar más; BottomNav | Consulta simple sin gráficos |
 | A01 Acceso | Logo horizontal CobraVoz; slogan corto; correo/contraseña; CTA Iniciar sesión | Simpleza |
 | A02 Configuración | Volver; negocio/cuenta en solo lectura; switch anuncio de voz; Cerrar sesión | Sin cambiar banco |

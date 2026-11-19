@@ -348,6 +348,23 @@ describe("AmountConfirmation — forma de cobro", () => {
     ).toBeInTheDocument();
     expect(confirmButton()).toBeDisabled();
   });
+
+  it("el enlace no pide celular y confirma el importe capturado", async () => {
+    const { onConfirm, user } = setup({ initialCents: 15050 });
+    await user.click(screen.getByRole("radio", { name: "Enlace" }));
+
+    expect(
+      screen.queryByLabelText("Celular del cliente"),
+    ).not.toBeInTheDocument();
+    expect(confirmButton()).toBeEnabled();
+    await user.click(confirmButton());
+
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith({
+      cents: 15050,
+      method: "link",
+      phoneNumber: null,
+    });
+  });
 });
 
 describe("AmountConfirmation — protección contra duplicados", () => {

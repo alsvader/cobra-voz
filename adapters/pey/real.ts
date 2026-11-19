@@ -5,12 +5,16 @@ import {
   centsToPeyAmountToken,
 } from "./contract";
 import type {
+  CreatePaymentLinkOutcome,
+  CreatePaymentLinkRequest,
   CreatePushOutcome,
   CreatePushRequest,
   CreateQrOutcome,
   CreateQrRequest,
+  PaymentLinkTransaction,
   PeyAdapter,
   QueriedPayment,
+  QueryPaymentLinkOutcome,
   QueryPushPaymentOutcome,
   QueryQrPaymentsOutcome,
 } from "./types";
@@ -248,6 +252,79 @@ export function createRealPeyAdapter(options: RealPeyOptions): PeyAdapter {
         chargeId: parsed.chargeId,
       };
     },
+
+    async createPaymentLink(input): Promise<CreatePaymentLinkOutcome> {
+      const body = buildPaymentLinkBody(input);
+      if (!body) {
+        return { status: "rejected", errorType: linkRequestError(input) };
+      }
+
+      const response = await request(`${BASE_URL}/payment-link/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (!response) {
+        return {
+          status: "uncertain",
+          reason: "Pey no respondió al crear el enlace.",
+        };
+      }
+      if (response.status === 400) {
+        const errorType = peyErrorType(await readJson(response));
+        return { status: "rejected", errorType: errorType ?? "INVALID_REQUEST" };
+      }
+      if (response.status !== 200) {
+        const errorType = peyErrorType(await readJson(response));
+        return {
+          status: "uncertain",
+          reason: `Pey no confirmó el enlace (HTTP ${response.status}${errorType ? `, ${errorType}` : ""}).`,
+        };
+      }
+
+      const created = parsePaymentLinkCreated(
+        await readJson(response),
+        input,
+        now(),
+      );
+      if (!created) {
+        return {
+          status: "uncertain",
+          reason: "La respuesta de Pey no trae un enlace utilizable.",
+        };
+      }
+      return created;
+    },
+
+    async queryPaymentLink(peyPaymentLinkId): Promise<QueryPaymentLinkOutcome> {
+      const id = peyPaymentLinkId.trim();
+      if (!id || id.length > 128) {
+        return {
+          status: "unavailable",
+          reason: "No hay un enlace de Pey que consultar.",
+        };
+      }
+
+      const response = await request(
+        `${BASE_URL}/payment-link/${encodeURIComponent(id)}`,
+        { method: "GET" },
+      );
+      if (!response || response.status !== 200) {
+        return {
+          status: "unavailable",
+          reason: "Pey no confirmó la consulta del enlace.",
+        };
+      }
+
+      const parsed = parsePaymentLink(await readJson(response));
+      if (!parsed) {
+        return {
+          status: "unavailable",
+          reason: "La consulta del enlace no tiene la forma esperada.",
+        };
+      }
+      return parsed;
+    },
   };
 }
 
@@ -300,6 +377,126 @@ function buildPushBody(request: CreatePushRequest): string | null {
   const amount = centsToPeyAmountToken(REAL_QR_AMOUNT_CENTS);
   const rest = JSON.stringify(fields);
   return `{"amount":${amount},${rest.slice(1)}`;
+}
+
+const HTTPS_URL = /^https:\/\/[^\s]+$/;
+
+function linkRequestError(request: CreatePaymentLinkRequest): string {
+  if (!Number.isInteger(request.amountCents) || request.amountCents <= 0) {
+    return "INVALID_AMOUNT";
+  }
+  if (!HTTPS_URL.test(request.successUrl) || !HTTPS_URL.test(request.backUrl)) {
+    return "INVALID_URL";
+  }
+  return "INVALID_REQUEST";
+}
+
+function buildPaymentLinkBody(request: CreatePaymentLinkRequest): string | null {
+  if (linkRequestError(request) !== "INVALID_REQUEST") return null;
+  if (!request.chargeId.trim() || request.chargeId.length > 128) return null;
+  if (
+    !Number.isInteger(request.expirationSeconds) ||
+    request.expirationSeconds < MIN_EXPIRATION_SECONDS
+  ) {
+    return null;
+  }
+  const amount = centsToPeyAmountToken(request.amountCents);
+  const rest = JSON.stringify({
+    successUrl: request.successUrl,
+    backUrl: request.backUrl,
+    hasTip: false,
+    clientReferenceId: request.chargeId,
+    metadata: { chargeId: request.chargeId },
+  });
+  return `{"amount":${amount},${rest.slice(1)}`;
+}
+
+function parsePaymentLinkCreated(
+  json: unknown,
+  request: CreatePaymentLinkRequest,
+  now: Date,
+): CreatePaymentLinkOutcome | null {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return null;
+  const id = (json as { id?: unknown }).id;
+  const url = (json as { url?: unknown }).url;
+  if (typeof id !== "string" || typeof url !== "string") return null;
+  const peyPaymentLinkId = id.trim();
+  const linkUrl = url.trim();
+  if (
+    !peyPaymentLinkId ||
+    peyPaymentLinkId.length > 128 ||
+    !HTTPS_URL.test(linkUrl) ||
+    linkUrl.length > 2048
+  ) {
+    return null;
+  }
+  return {
+    status: "created",
+    peyPaymentLinkId,
+    url: linkUrl,
+    expiresAt: new Date(now.getTime() + request.expirationSeconds * 1000),
+  };
+}
+
+function parsePaymentLink(json: unknown): QueryPaymentLinkOutcome | null {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return null;
+  const status = (json as { status?: unknown }).status;
+  if (
+    status !== "pending" &&
+    status !== "processing" &&
+    status !== "partial" &&
+    status !== "paid"
+  ) {
+    return null;
+  }
+  if (status !== "paid") {
+    return { status: "ok", state: status, transaction: null };
+  }
+  const transactions = (json as { transactions?: unknown }).transactions;
+  const transaction = Array.isArray(transactions)
+    ? readLinkTransaction(transactions[0])
+    : null;
+  return { status: "ok", state: "paid", transaction };
+}
+
+function readLinkTransaction(item: unknown): PaymentLinkTransaction | null {
+  if (!item || typeof item !== "object") return null;
+  const record = item as {
+    transactionId?: unknown;
+    amount?: unknown;
+    datePaid?: unknown;
+    amountBreakdown?: unknown;
+  };
+  if (typeof record.transactionId !== "string") return null;
+  const transactionId = record.transactionId.trim();
+  if (!transactionId || transactionId.length > 128) return null;
+  if (typeof record.amount !== "number" || typeof record.datePaid !== "number") {
+    return null;
+  }
+  const amount = pesosNumberToCents(record.amount);
+  if (!amount.ok) return null;
+  const breakdown = record.amountBreakdown;
+  const baseValue =
+    breakdown &&
+    typeof breakdown === "object" &&
+    typeof (breakdown as { base?: unknown }).base === "number"
+      ? (breakdown as { base: number }).base
+      : record.amount;
+  const base = pesosNumberToCents(baseValue);
+  if (!base.ok) return null;
+  if (
+    !Number.isInteger(record.datePaid) ||
+    record.datePaid < MIN_UNIX_SECONDS ||
+    record.datePaid > MAX_UNIX_SECONDS
+  ) {
+    return null;
+  }
+  return {
+    transactionId,
+    amountCents: amount.cents,
+    baseCents: base.cents,
+    paidAt: new Date(record.datePaid * 1000),
+  };
 }
 
 function parsePushCreated(

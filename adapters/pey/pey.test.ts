@@ -147,6 +147,28 @@ describe("getPeyAdapter — el simulador nunca llega a producción", () => {
     expect(getPeyAdapter(env).kind).toBe("mock");
   });
 
+  it("el simulador local recuerda un enlace entre una llamada y la siguiente", async () => {
+    const env = { NEXT_PUBLIC_APP_ENV: "local" };
+    const created = await getPeyAdapter(env).createPaymentLink({
+      chargeId: request.chargeId,
+      amountCents: MOCK_QUERY_PAID_AMOUNT_CENTS,
+      expirationSeconds: 600,
+      successUrl: "https://cobravoz.example/enlace/pago-completado",
+      backUrl: "https://cobravoz.example/enlace/pago-cancelado",
+    });
+    expect(created.status).toBe("created");
+    if (created.status !== "created") return;
+
+    const queried = await getPeyAdapter(env).queryPaymentLink(
+      created.peyPaymentLinkId,
+    );
+    expect(queried).toMatchObject({
+      status: "ok",
+      state: "paid",
+      transaction: { amountCents: MOCK_QUERY_PAID_AMOUNT_CENTS },
+    });
+  });
+
   it("en producción, con API key, usa el cliente real", () => {
     const env = {
       NEXT_PUBLIC_APP_ENV: "production",

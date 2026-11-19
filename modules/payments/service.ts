@@ -7,6 +7,7 @@ import {
   merchants,
   paymentEvents,
   paymentIncidents,
+  paymentLinks,
   payments,
 } from "@/adapters/db/schema";
 import { REAL_QR_AMOUNT_CENTS } from "@/adapters/pey/contract";
@@ -31,7 +32,7 @@ const MISMATCH_LABEL = {
 type Mismatch = keyof typeof MISMATCH_LABEL;
 
 export type RecordPaymentResult = {
-  outcome: "paid" | "incident";
+  outcome: "paid" | "incident" | "ignored";
   /** Esta entrega ya se había procesado, o la transacción bancaria ya existía. */
   duplicate: boolean;
 };
@@ -69,13 +70,17 @@ export async function recordPeyPayment(
   const now = (deps.now ?? (() => new Date()))();
   const evidenceSource = options.evidenceSource ?? "webhook";
   const eventType =
-    notice.kind === "pn"
+    notice.kind === "link"
       ? evidenceSource === "provider_query"
-        ? "codi.pn.payment_query"
-        : "codi.pn.payment_received"
-      : evidenceSource === "provider_query"
-        ? "codi.qr.payment_query"
-        : "codi.qr.payment_received";
+        ? "payment_link.status_query"
+        : "payment_link.status_updated"
+      : notice.kind === "pn"
+        ? evidenceSource === "provider_query"
+          ? "codi.pn.payment_query"
+          : "codi.pn.payment_received"
+        : evidenceSource === "provider_query"
+          ? "codi.qr.payment_query"
+          : "codi.qr.payment_received";
 
   return deps.db.transaction(async (tx) => {
     const [inserted] = await tx
@@ -86,7 +91,10 @@ export async function recordPeyPayment(
         eventType,
         validationStatus: "verified",
         processingStatus: "pending",
-        providerTransactionId: notice.transactionId,
+        providerTransactionId:
+          notice.kind === "link"
+            ? (notice.transactionId ?? notice.paymentLinkId)
+            : notice.transactionId,
         providerQrId: notice.kind === "qr" ? notice.codiQrId : null,
         receivedAt: now,
       })
@@ -103,10 +111,27 @@ export async function recordPeyPayment(
         .where(eq(paymentEvents.id, eventId));
       if (prior && prior.status !== "pending") {
         return {
-          outcome: prior.status === "applied" ? "paid" : "incident",
+          outcome:
+            prior.status === "applied"
+              ? "paid"
+              : prior.status === "ignored"
+                ? "ignored"
+                : "incident",
           duplicate: true,
         };
       }
+    }
+
+    if (notice.kind === "link" && !notice.settles) {
+      await tx
+        .update(paymentEvents)
+        .set({
+          processingStatus: "ignored",
+          processedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(paymentEvents.id, eventId));
+      return { outcome: "ignored", duplicate: false };
     }
 
     const instrument = await findInstrument(tx, notice);
@@ -118,7 +143,9 @@ export async function recordPeyPayment(
         reason:
           notice.kind === "qr"
             ? "Pey avisó un pago de un QR que CobraVoz no tiene registrado."
-            : "Pey avisó un pago de una notificación que CobraVoz no tiene registrada.",
+            : notice.kind === "link"
+              ? "Pey avisó un pago de un enlace que CobraVoz no tiene registrado."
+              : "Pey avisó un pago de una notificación que CobraVoz no tiene registrada.",
       });
       return { outcome: "incident", duplicate: false };
     }
@@ -128,13 +155,19 @@ export async function recordPeyPayment(
       notice.chargeId != null && notice.chargeId !== instrument.chargeId;
     const reconciled = mismatches.length === 0 && !chargeMismatch;
 
+    const providerTransactionId =
+      notice.kind === "link"
+        ? (notice.transactionId ?? notice.paymentLinkId)
+        : notice.transactionId;
+
     const [payment] = await tx
       .insert(payments)
       .values({
         codiQrId: instrument.kind === "qr" ? instrument.id : null,
         codiNotificationId: instrument.kind === "pn" ? instrument.id : null,
+        paymentLinkId: instrument.kind === "link" ? instrument.id : null,
         provider: PROVIDER,
-        providerTransactionId: notice.transactionId,
+        providerTransactionId,
         amountCents: notice.amountCents,
         reconciliationStatus: reconciled ? "reconciled" : "incident",
         evidenceSource,
@@ -154,7 +187,7 @@ export async function recordPeyPayment(
         .where(
           and(
             eq(payments.provider, PROVIDER),
-            eq(payments.providerTransactionId, notice.transactionId),
+            eq(payments.providerTransactionId, providerTransactionId),
           ),
         )
         .limit(1);
@@ -164,6 +197,7 @@ export async function recordPeyPayment(
           processingStatus: "ignored",
           codiQrId: instrument.kind === "qr" ? instrument.id : null,
           codiNotificationId: instrument.kind === "pn" ? instrument.id : null,
+          paymentLinkId: instrument.kind === "link" ? instrument.id : null,
           processedAt: now,
           updatedAt: now,
         })
@@ -180,6 +214,7 @@ export async function recordPeyPayment(
         processingStatus: reconciled ? "applied" : "incident",
         codiQrId: instrument.kind === "qr" ? instrument.id : null,
         codiNotificationId: instrument.kind === "pn" ? instrument.id : null,
+        paymentLinkId: instrument.kind === "link" ? instrument.id : null,
         paymentId: payment.id,
         processedAt: now,
         updatedAt: now,
@@ -230,7 +265,7 @@ export async function recordPeyPayment(
 }
 
 type Instrument = {
-  kind: "qr" | "pn";
+  kind: "qr" | "pn" | "link";
   id: string;
   chargeId: string;
   amountCents: number;
@@ -242,6 +277,22 @@ async function findInstrument(
   tx: Parameters<Parameters<Database["transaction"]>[0]>[0],
   notice: PeyPaymentNotice,
 ): Promise<Instrument | null> {
+  if (notice.kind === "link") {
+    const [link] = await tx
+      .select({
+        id: paymentLinks.id,
+        chargeId: charges.id,
+        amountCents: charges.amountCents,
+      })
+      .from(paymentLinks)
+      .innerJoin(charges, eq(charges.id, paymentLinks.chargeId))
+      .where(eq(paymentLinks.peyPaymentLinkId, notice.paymentLinkId))
+      .limit(1);
+    return link
+      ? { kind: "link", numRef: 0, bankAccountId: "", ...link }
+      : null;
+  }
+
   if (notice.kind === "qr") {
     const [qr] = await tx
       .select({
@@ -279,6 +330,9 @@ function mismatchesOf(
   notice: PeyPaymentNotice,
   qr: { amountCents: number; numRef: number; bankAccountId: string },
 ): Mismatch[] {
+  if (notice.kind === "link") {
+    return notice.baseCents === qr.amountCents ? [] : ["amount_mismatch"];
+  }
   const found: Mismatch[] = [];
   const hackathonCent = notice.amountCents === REAL_QR_AMOUNT_CENTS;
   if (notice.amountCents !== qr.amountCents && !hackathonCent) {

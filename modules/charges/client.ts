@@ -38,7 +38,7 @@ export async function submitCharge(
   input: {
     amountCents: number;
     idempotencyKey: string;
-    method?: "qr" | "pn";
+    method?: "qr" | "pn" | "link";
     phoneNumber?: string | null;
   },
   fetchImpl: typeof fetch = fetch,
@@ -46,7 +46,7 @@ export async function submitCharge(
   const payload: {
     amountCents: number;
     idempotencyKey: string;
-    method: "qr" | "pn";
+    method: "qr" | "pn" | "link";
     phoneNumber?: string;
   } = {
     amountCents: input.amountCents,

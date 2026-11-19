@@ -10,6 +10,8 @@
 
 > **Cambio 2026-11-18.** En P02, antes de confirmar, se elige «Código QR» (marcado) o «Notificación». La notificación muestra «Celular del cliente»: 10 dígitos, sin lada, y «Confirmar importe» sigue deshabilitado hasta que el número es válido. En P03 no hay código: se ven el importe, la referencia, el tiempo y los últimos 4. El pendiente dice «Enviando aviso…». Esta notificación es el aviso CoDi al cliente, no un anuncio de la PWA cerrada.
 
+> **Cambio 2026-11-18, enlace.** En P02 hay una tercera opción, «Enlace», sin celular. El pendiente dice «Creando enlace…». En espera se ven la dirección, un botón para copiarla, la referencia y el tiempo. No se abre la página de pago en el celular del comercio. Si Pey rechaza el enlace, el texto es «No pudimos crear el enlace». Si no se sabe si lo creó, «No pudimos confirmar el enlace». `/enlace/pago-completado` y `/enlace/pago-cancelado` son páginas públicas para el cliente y no cambian el cobro.
+
 ## 1. Principios UX
 
 1. **Cobrar antes que administrar:** el acceso principal inicia un cobro; lo demás es secundario.
@@ -138,7 +140,7 @@
 3. Transcripción original **si proviene de voz**; omitirla si origen manual.
 4. Acción principal **Confirmar importe**.
 5. Opciones secundarias **Corregir importe**, **Volver a hablar**, **Cancelar**.
-6. **Forma de cobro**, antes de confirmar: «Código QR» marcado, o «Notificación» con el celular de 10 dígitos.
+6. **Forma de cobro**, antes de confirmar: «Código QR» marcado, «Notificación» con el celular de 10 dígitos, o «Enlace» sin celular.
 
 La corrección manual usa campo dentro de P02; validación visible y CTA deshabilitado durante petición en curso. Sin barra inferior. Con notificación, confirmar permanece deshabilitado hasta que el celular tiene 10 dígitos.
 
@@ -148,8 +150,8 @@ La corrección manual usa campo dentro de P02; validación visible y CTA deshabi
 
 | Estado | Contenido indispensable | Acciones |
 |---|---|---|
-| Generando QR | Importe, indicador de carga, aviso «Generando código». Con notificación: «Enviando aviso…» | Evitar doble envío; cancelación segura si aplica |
-| Esperando pago | QR **real**, importe, referencia y tiempo restante. Con notificación: los últimos 4 dígitos y ningún código | Consultar nuevamente / Cerrar cobro |
+| Generando QR | Importe, indicador de carga, aviso «Generando código». Con notificación: «Enviando aviso…». Con enlace: «Creando enlace…» | Evitar doble envío; cancelación segura si aplica |
+| Esperando pago | QR **real**, importe, referencia y tiempo restante. Con notificación: los últimos 4 dígitos y ningún código. Con enlace: la URL para copiar, sin abrirla aquí | Consultar nuevamente / Cerrar cobro |
 | Verificación no disponible | QR/contexto cuando existe, mensaje explícito de incertidumbre | Consultar nuevamente / Cerrar cobro según estado |
 | Pagado | Éxito persistente, importe, referencia | **Nuevo cobro** / Ver detalle |
 | Expirado | Importe, estado, referencia, aclaración de posible pago tardío | Nuevo cobro con intención nueva / Ver detalle |
