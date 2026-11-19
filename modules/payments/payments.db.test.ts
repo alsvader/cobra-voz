@@ -500,6 +500,45 @@ describe("recordPeyPayment", () => {
       .from(charges)
       .where(eq(charges.id, created.charge.id));
     expect(row.status).toBe("paid");
+    expect(row.amountCents).toBe(10000);
+  });
+
+  it("un enlace de un centavo cierra el cobro y conserva el importe capturado", async () => {
+    const merchant = await newMerchant();
+    const created = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      { amountCents: 15050, idempotencyKey: randomUUID(), method: "link" },
+    );
+    if (!created.ok) throw new Error("setup");
+    const [link] = await db
+      .select()
+      .from(paymentLinks)
+      .where(eq(paymentLinks.chargeId, created.charge.id));
+
+    const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "link",
+      paymentLinkId: link.peyPaymentLinkId,
+      settles: true,
+      transactionId: `tx-${randomUUID()}`,
+      amountCents: 1,
+      baseCents: 1,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+      chargeId: created.charge.id,
+    });
+
+    expect(result).toEqual({ outcome: "paid", duplicate: false });
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.paymentLinkId, link.id));
+    expect(payment.amountCents).toBe(1);
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, created.charge.id));
+    expect(row.status).toBe("paid");
+    expect(row.amountCents).toBe(15050);
   });
 
   it("un enlace pendiente no cierra el cobro", async () => {

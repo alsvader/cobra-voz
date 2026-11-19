@@ -36,7 +36,7 @@ Para quien atiende solo un puesto de comida, una fonda o un tianguis: muchos cob
 3. Pulsas «Confirmar importe». Si elegiste notificación, escribes antes los 10 dígitos del celular, sin lada. El enlace no pide celular. Esa acción crea la intención de cobro.
 4. Si Pey responde, la pantalla muestra el QR, confirma que el aviso salió o muestra el enlace para copiar. El importe de esa solicitud ya no cambia.
 5. El cliente paga con su app bancaria: escanea el código, acepta la notificación o abre el enlace.
-6. Un aviso firmado, o una conciliación que coincide, marca el cobro como pagado y la pantalla muestra «¡Pago recibido!». En QR y notificación se comparan el instrumento, el importe, la referencia y la cuenta. En el enlace se compara la base del pago con el importe del cobro; la propina y la comisión no son un desajuste. Con la pestaña abierta y «Anunciar pagos» activo, también lo dice una sola vez. Un aviso que no coincide queda como incidencia y no entra en las ventas.
+6. Un aviso firmado, o una conciliación que coincide, marca el cobro como pagado y la pantalla muestra «¡Pago recibido!». En QR y notificación se comparan el instrumento, el importe, la referencia y la cuenta. En el enlace, un pago de un centavo cierra el cobro. Si la base trae el importe capturado, también lo cierra; la propina y la comisión no son un desajuste. Con la pestaña abierta y «Anunciar pagos» activo, también lo dice una sola vez. Un aviso que no coincide queda como incidencia y no entra en las ventas.
 7. Al volver a Inicio o a Ventas, el pago conciliado aparece en el total del día.
 
 <p align="center">
@@ -48,7 +48,7 @@ El recorrido de arriba usa la captura manual de $150.00 en el simulador local.
 ### Así está el piloto
 
 - En local y en preview responde el simulador, aunque exista una clave de Pey. El QR dice «QR de prueba · no sirve para pagar». El importe **$13.01** deja la creación en estado incierto, en QR, en notificación y en enlace. **$13.02**, al pulsar «Consultar nuevamente», marca pagado ese cobro de prueba. **$13.03** simula que la consulta no responde.
-- En producción, con `PEY_API_KEY`, el QR y la notificación bancarios son siempre de **$0.01**. El enlace cobra el importe capturado. El importe confirmado en la app se guarda y se muestra como la venta. En QR y notificación el banco mueve un centavo, y ese centavo concilia el cobro. El total del día suma el dinero recibido, venga de un QR, de una notificación o de un enlace.
+- En producción, con `PEY_API_KEY`, el QR, la notificación y el enlace bancarios son siempre de **$0.01**. El importe confirmado en la app se guarda y se muestra como la venta. El banco mueve un centavo, y ese centavo concilia el cobro. El total del día suma ese centavo, venga de un QR, de una notificación o de un enlace.
 - La notificación no guarda el celular completo: solo un resumen y los últimos 4 dígitos.
 - Con «Anunciar pagos» activo, un pago que la pantalla de cobro ve llegar se dice una sola vez: «¡Pago recibido!» y el importe en palabras. Hace falta la pestaña abierta. El aviso en pantalla aparece igual si el audio no sale.
 
@@ -150,8 +150,8 @@ reintenta a ciegas. Un HTTP 400 al crear el enlace cierra esa intención: el enl
 no existe y `creationResult` queda `rejected`. En Local/Preview responde el
 simulador (`adapters/pey`), aunque exista `PEY_API_KEY`: el importe **$13.01**
 fuerza un resultado incierto. En producción, con `PEY_API_KEY`, el cliente es el
-real. El movimiento bancario de QR o de notificación es de **$0.01**. El enlace
-cobra el importe capturado. Sin clave, fuera de local y preview,
+real. El movimiento bancario del QR, de la notificación y del enlace es de
+**$0.01**. Sin clave, fuera de local y preview,
 `POST /api/charges` responde 503 y no crea la intención.
 
 P03 (`/cobro/[id]`) es una sola pantalla con variantes según el estado **persistido**:

@@ -93,7 +93,7 @@ export type QueryPushPaymentOutcome =
 
 export type CreatePaymentLinkRequest = {
   chargeId: string;
-  /** Importe capturado. El enlace cobra esto, no el centavo del QR. */
+  /** Importe capturado en la app. El cliente real envía $0.01, igual que el QR. */
   amountCents: number;
   expirationSeconds: number;
   successUrl: string;

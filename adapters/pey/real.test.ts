@@ -413,7 +413,7 @@ describe("cliente Pey real", () => {
     expect(outcome.status).toBe("unavailable");
   });
 
-  it("crea el enlace con el importe capturado y las direcciones de regreso", async () => {
+  it("crea el enlace por $0.01 y conserva las direcciones de regreso", async () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const pey = createRealPeyAdapter({
       apiKey: "pey-live-key",
@@ -442,13 +442,14 @@ describe("cliente Pey real", () => {
     });
     expect(calls[0].url).toBe("https://api.pey.mx/payment-link/create");
     expect(JSON.parse(String(calls[0].init.body))).toEqual({
-      amount: 150.5,
+      amount: 0.01,
       successUrl: "https://cobravoz.example/enlace/pago-completado",
       backUrl: "https://cobravoz.example/enlace/pago-cancelado",
       hasTip: false,
       clientReferenceId: request.chargeId,
       metadata: { chargeId: request.chargeId },
     });
+    expect(String(calls[0].init.body)).not.toContain("150.50");
   });
 
   it("un 400 rechaza el enlace y no guarda el mensaje libre", async () => {

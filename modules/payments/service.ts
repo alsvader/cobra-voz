@@ -55,7 +55,8 @@ type RecordOptions = {
  * - El mismo `transactionId` no crea dos pagos, aunque llegue en otra entrega.
  * - Solo un aviso que coincide en QR, importe, referencia y cuenta deja el
  *   cobro en `paid`. Un pago de exactamente un centavo también: es el importe
- *   del QR real, aunque el cobro guarde el importe capturado en la app.
+ *   del QR, de la notificación y del enlace reales, aunque el cobro guarde el
+ *   importe capturado en la app.
  *   Un pago tardío (cobro vencido o cerrado en local) también cuenta,
  *   porque vencido no es rechazado.
  * - Una discrepancia guarda el pago como incidencia y no lo cuenta como venta.
@@ -331,7 +332,12 @@ function mismatchesOf(
   qr: { amountCents: number; numRef: number; bankAccountId: string },
 ): Mismatch[] {
   if (notice.kind === "link") {
-    return notice.baseCents === qr.amountCents ? [] : ["amount_mismatch"];
+    const hackathonCent =
+      notice.baseCents === REAL_QR_AMOUNT_CENTS ||
+      notice.amountCents === REAL_QR_AMOUNT_CENTS;
+    return notice.baseCents === qr.amountCents || hackathonCent
+      ? []
+      : ["amount_mismatch"];
   }
   const found: Mismatch[] = [];
   const hackathonCent = notice.amountCents === REAL_QR_AMOUNT_CENTS;

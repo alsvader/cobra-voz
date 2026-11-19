@@ -10,7 +10,7 @@
 
 > **Cambio 2026-11-18.** El cobro puede ser un QR, que sigue como default, o una notificación CoDi. El contrato de Pey está en `adapters/pey/README.md`. La sección 17 registra el modelo. No reabre el anuncio al comerciante con la PWA cerrada.
 
-> **Cambio 2026-11-18, enlace.** La tercera forma es el enlace de pago. La sección 18 registra el modelo. El cron de Supabase no cambia. El centavo sigue solo en QR y notificación.
+> **Cambio 2026-11-18, enlace.** La tercera forma es el enlace de pago. La sección 18 registra el modelo. El cron de Supabase no cambia. En el MVP el enlace también mueve $0.01.
 
 ## 1. ADR y decisiones congeladas
 
@@ -298,9 +298,9 @@ El cambio del 2026-11-18 agrega la notificación como segundo instrumento. El cr
 
 ## 18. Cobro por enlace
 
-- `POST /payment-link/create` envía el importe capturado. No se llama a `POST /payment-link/update`.
+- `POST /payment-link/create` envía $0.01. El cobro guarda el importe capturado. No se llama a `POST /payment-link/update`.
 - `payment_links` existe solo tras un 200 con `id` y `url` HTTPS. `charge_id` y `pey_payment_link_id` son únicos.
 - Un 400 deja `qr_uncertain` con `creation_result = rejected` y una incidencia `other` cuyo motivo es solo `error.type`. Un 500, un timeout o un 200 incompleto dejan `creation_result = uncertain`. Ninguno se reintenta.
 - `successUrl` y `backUrl` son páginas públicas. No viven bajo `/cobro` y no marcan el pago.
-- El webhook `payment_link.status_updated` se casa por `paymentLinkId`. Un id desconocido no crea un cobro. `pending`, `processing` y `partial` no cierran. `paid` cierra solo si `amountBreakdown.base` coincide con el importe del cobro. `payments.amount_cents` guarda el monto liquidado.
+- El webhook `payment_link.status_updated` se casa por `paymentLinkId`. Un id desconocido no crea un cobro. `pending`, `processing` y `partial` no cierran. `paid` cierra si la base es $0.01 o coincide con el importe del cobro. `payments.amount_cents` guarda el monto liquidado.
 - La conciliación usa `GET /payment-link/:id` en el mismo cron. Una consulta no disponible no marca pagado y no borra el cobro.

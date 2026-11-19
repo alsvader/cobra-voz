@@ -1,5 +1,5 @@
 /**
- * Importe que el cliente real escribe en cada QR.
+ * Importe que el cliente real escribe en el QR, la notificación y el enlace.
  * El cobro guarda el importe capturado en la app; el banco solo mueve esto.
  * Pey pide probar en producción con $0.01 (docs.pey.mx, OpenAPI 2026-10-20).
  */

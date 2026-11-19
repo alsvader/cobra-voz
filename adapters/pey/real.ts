@@ -400,7 +400,7 @@ function buildPaymentLinkBody(request: CreatePaymentLinkRequest): string | null 
   ) {
     return null;
   }
-  const amount = centsToPeyAmountToken(request.amountCents);
+  const amount = centsToPeyAmountToken(REAL_QR_AMOUNT_CENTS);
   const rest = JSON.stringify({
     successUrl: request.successUrl,
     backUrl: request.backUrl,
