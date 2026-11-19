@@ -5,12 +5,16 @@ import type { PeyAdapter } from "./types";
 export { REAL_QR_AMOUNT_CENTS } from "./contract";
 
 export type {
+  CreatePaymentLinkOutcome,
+  CreatePaymentLinkRequest,
   CreatePushOutcome,
   CreatePushRequest,
   CreateQrOutcome,
   CreateQrRequest,
+  PaymentLinkTransaction,
   PeyAdapter,
   QueriedPayment,
+  QueryPaymentLinkOutcome,
   QueryPushPaymentOutcome,
   QueryQrPaymentsOutcome,
 } from "./types";
@@ -39,7 +43,12 @@ export function isMockPeyAllowed(env: Env): boolean {
   );
 }
 
-let cachedMock: PeyAdapter | undefined;
+/**
+ * Un `let` de módulo no basta: en desarrollo cada ruta compila su propia
+ * copia. Crear el enlace y consultarlo caerían en simuladores distintos y
+ * $13.02 nunca se marcaría pagado. `globalThis` es uno solo por proceso.
+ */
+const globalForPey = globalThis as unknown as { __cobravozPey?: PeyAdapter };
 
 /**
  * Elige el adaptador.
@@ -55,8 +64,8 @@ export function getPeyAdapter(
   },
 ): PeyAdapter {
   if (isMockPeyAllowed(env)) {
-    cachedMock ??= createMockPeyAdapter();
-    return cachedMock;
+    globalForPey.__cobravozPey ??= createMockPeyAdapter();
+    return globalForPey.__cobravozPey;
   }
 
   const apiKey = env.PEY_API_KEY?.trim();

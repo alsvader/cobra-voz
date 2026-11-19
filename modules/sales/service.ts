@@ -6,6 +6,7 @@ import {
   codiNotifications,
   codiQrs,
   merchants,
+  paymentLinks,
   payments,
 } from "@/adapters/db/schema";
 import { chargeReference } from "@/modules/charges/reference";
@@ -78,8 +79,8 @@ async function expireDue(db: Database, merchantId: string, now: Date) {
 
 /**
  * Total y número de pagos conciliados cuyo `paid_at` cae en el día comercial
- * del comercio. Cuenta el QR y la notificación: el pago de un aviso no tiene
- * `codi_qr_id`. Suma el dinero recibido, no el importe capturado. Un
+ * del comercio. Cuenta el QR, la notificación y el enlace: cada pago tiene
+ * un solo padre. Suma el dinero recibido, no el importe capturado. Un
  * incidente, un pendiente o un vencido no entra.
  */
 export async function getDailySummary(
@@ -101,9 +102,10 @@ export async function getDailySummary(
       codiNotifications,
       eq(codiNotifications.id, payments.codiNotificationId),
     )
+    .leftJoin(paymentLinks, eq(paymentLinks.id, payments.paymentLinkId))
     .innerJoin(
       charges,
-      sql`${charges.id} = coalesce(${codiQrs.chargeId}, ${codiNotifications.chargeId})`,
+      sql`${charges.id} = coalesce(${codiQrs.chargeId}, ${codiNotifications.chargeId}, ${paymentLinks.chargeId})`,
     )
     .where(
       and(

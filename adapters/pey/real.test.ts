@@ -412,4 +412,173 @@ describe("cliente Pey real", () => {
     const outcome = await pey.queryCodiQrPayments("AB12CD34EF");
     expect(outcome.status).toBe("unavailable");
   });
+
+  it("crea el enlace con el importe capturado y las direcciones de regreso", async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      now: () => now,
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), init: init ?? {} });
+        return jsonResponse({
+          id: "01LINK",
+          url: "https://app.mipey.mx/payment-link/01LINK",
+        });
+      },
+    });
+
+    const outcome = await pey.createPaymentLink({
+      chargeId: request.chargeId,
+      amountCents: 15050,
+      expirationSeconds: 600,
+      successUrl: "https://cobravoz.example/enlace/pago-completado",
+      backUrl: "https://cobravoz.example/enlace/pago-cancelado",
+    });
+
+    expect(outcome).toMatchObject({
+      status: "created",
+      peyPaymentLinkId: "01LINK",
+      url: "https://app.mipey.mx/payment-link/01LINK",
+    });
+    expect(calls[0].url).toBe("https://api.pey.mx/payment-link/create");
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({
+      amount: 150.5,
+      successUrl: "https://cobravoz.example/enlace/pago-completado",
+      backUrl: "https://cobravoz.example/enlace/pago-cancelado",
+      hasTip: false,
+      clientReferenceId: request.chargeId,
+      metadata: { chargeId: request.chargeId },
+    });
+  });
+
+  it("un 400 rechaza el enlace y no guarda el mensaje libre", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      fetch: async () =>
+        jsonResponse(
+          {
+            error: {
+              type: "INVALID_AMOUNT",
+              message: "el monto secreto no sirve",
+            },
+          },
+          400,
+        ),
+    });
+    const outcome = await pey.createPaymentLink({
+      chargeId: request.chargeId,
+      amountCents: 15050,
+      expirationSeconds: 600,
+      successUrl: "https://cobravoz.example/enlace/pago-completado",
+      backUrl: "https://cobravoz.example/enlace/pago-cancelado",
+    });
+    expect(outcome).toEqual({ status: "rejected", errorType: "INVALID_AMOUNT" });
+    expect(JSON.stringify(outcome)).not.toContain("secreto");
+  });
+
+  it("un 500 deja el enlace incierto y no reintenta", async () => {
+    let calls = 0;
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      fetch: async () => {
+        calls += 1;
+        return jsonResponse(
+          {
+            error: {
+              type: "INTERNAL_SERVER_ERROR",
+              message: "falla interna secreta",
+            },
+          },
+          500,
+        );
+      },
+    });
+    const outcome = await pey.createPaymentLink({
+      chargeId: request.chargeId,
+      amountCents: 15050,
+      expirationSeconds: 600,
+      successUrl: "https://cobravoz.example/enlace/pago-completado",
+      backUrl: "https://cobravoz.example/enlace/pago-cancelado",
+    });
+    expect(outcome.status).toBe("uncertain");
+    if (outcome.status === "uncertain") {
+      expect(outcome.reason).toContain("HTTP 500");
+      expect(outcome.reason).toContain("INTERNAL_SERVER_ERROR");
+      expect(outcome.reason).not.toContain("secreta");
+    }
+    expect(calls).toBe(1);
+  });
+
+  it("un 200 incompleto deja el enlace incierto", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      fetch: async () => jsonResponse({ id: "01LINK" }),
+    });
+    const outcome = await pey.createPaymentLink({
+      chargeId: request.chargeId,
+      amountCents: 15050,
+      expirationSeconds: 600,
+      successUrl: "https://cobravoz.example/enlace/pago-completado",
+      backUrl: "https://cobravoz.example/enlace/pago-cancelado",
+    });
+    expect(outcome).toMatchObject({ status: "uncertain" });
+  });
+
+  it("no llama a Pey si las direcciones de regreso no son https", async () => {
+    let calls = 0;
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      fetch: async () => {
+        calls += 1;
+        return jsonResponse({});
+      },
+    });
+    const outcome = await pey.createPaymentLink({
+      chargeId: request.chargeId,
+      amountCents: 15050,
+      expirationSeconds: 600,
+      successUrl: "http://localhost:3000/enlace/pago-completado",
+      backUrl: "http://localhost:3000/enlace/pago-cancelado",
+    });
+    expect(outcome).toEqual({ status: "rejected", errorType: "INVALID_URL" });
+    expect(calls).toBe(0);
+  });
+
+  it("consulta el enlace y separa la base de la propina", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      fetch: async () =>
+        jsonResponse({
+          id: "01LINK",
+          status: "paid",
+          transactions: [
+            {
+              transactionId: "01TX",
+              amount: 118.5,
+              datePaid: 1790724818,
+              amountBreakdown: { base: 100, tip: 15, fee: 3.5 },
+            },
+          ],
+        }),
+    });
+    const outcome = await pey.queryPaymentLink("01LINK");
+    expect(outcome).toMatchObject({
+      status: "ok",
+      state: "paid",
+      transaction: {
+        transactionId: "01TX",
+        amountCents: 11850,
+        baseCents: 10000,
+      },
+    });
+  });
+
+  it("un error al consultar el enlace no se toma como pagado", async () => {
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      fetch: async () => jsonResponse({ type: "NOT_FOUND" }, 404),
+    });
+    const outcome = await pey.queryPaymentLink("01LINK");
+    expect(outcome.status).toBe("unavailable");
+  });
 });

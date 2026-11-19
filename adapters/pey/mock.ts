@@ -1,11 +1,14 @@
 import { randomInt, randomUUID } from "node:crypto";
 import type {
+  CreatePaymentLinkOutcome,
+  CreatePaymentLinkRequest,
   CreatePushOutcome,
   CreatePushRequest,
   CreateQrOutcome,
   CreateQrRequest,
   PeyAdapter,
   QueriedPayment,
+  QueryPaymentLinkOutcome,
   QueryPushPaymentOutcome,
   QueryQrPaymentsOutcome,
 } from "./types";
@@ -48,6 +51,8 @@ export type MockPeyAdapter = PeyAdapter & {
   readonly calls: readonly CreateQrRequest[];
   /** Veces que se pidió enviar una notificación. */
   readonly pushCalls: readonly CreatePushRequest[];
+  /** Veces que se pidió crear un enlace. */
+  readonly linkCalls: readonly CreatePaymentLinkRequest[];
   /** Identificadores consultados, en orden. */
   readonly queryCalls: readonly string[];
   /** Programa el pago que devolverá la consulta de ese QR o transacción. */
@@ -60,15 +65,18 @@ export function createMockPeyAdapter(
   const now = options.now ?? (() => new Date());
   const calls: CreateQrRequest[] = [];
   const pushCalls: CreatePushRequest[] = [];
+  const linkCalls: CreatePaymentLinkRequest[] = [];
   const queryCalls: string[] = [];
   const issued = new Map<string, CreateQrRequest>();
   const issuedPush = new Map<string, CreatePushRequest>();
+  const issuedLinks = new Map<string, CreatePaymentLinkRequest>();
   const seeded = new Map<string, QueriedPayment[]>();
 
   return {
     kind: "mock",
     calls,
     pushCalls,
+    linkCalls,
     queryCalls,
     seedPayment(peyQrId, payment) {
       const list = seeded.get(peyQrId) ?? [];
@@ -183,6 +191,52 @@ export function createMockPeyAdapter(
         };
       }
       return { status: "ok", payment: null, chargeId: known?.chargeId ?? null };
+    },
+    async createPaymentLink(request): Promise<CreatePaymentLinkOutcome> {
+      linkCalls.push(request);
+      if (request.amountCents === MOCK_UNCERTAIN_AMOUNT_CENTS) {
+        return {
+          status: "uncertain",
+          reason: "Simulación: la solicitud a Pey agotó el tiempo de espera.",
+        };
+      }
+      const peyPaymentLinkId = `mock-link-${randomUUID()}`;
+      issuedLinks.set(peyPaymentLinkId, request);
+      return {
+        status: "created",
+        peyPaymentLinkId,
+        url: `https://app.mipey.mx/payment-link/${peyPaymentLinkId}`,
+        expiresAt: new Date(now().getTime() + request.expirationSeconds * 1000),
+      };
+    },
+    async queryPaymentLink(peyPaymentLinkId): Promise<QueryPaymentLinkOutcome> {
+      queryCalls.push(peyPaymentLinkId);
+      const known = issuedLinks.get(peyPaymentLinkId);
+      if (!known) {
+        return {
+          status: "unavailable",
+          reason: "Simulación: este proceso no creó ese enlace.",
+        };
+      }
+      if (known.amountCents === MOCK_QUERY_UNAVAILABLE_AMOUNT_CENTS) {
+        return {
+          status: "unavailable",
+          reason: "Simulación: Pey no respondió a la consulta.",
+        };
+      }
+      if (known.amountCents === MOCK_QUERY_PAID_AMOUNT_CENTS) {
+        return {
+          status: "ok",
+          state: "paid",
+          transaction: {
+            transactionId: `mock-tx-${peyPaymentLinkId}`,
+            amountCents: known.amountCents,
+            baseCents: known.amountCents,
+            paidAt: now(),
+          },
+        };
+      }
+      return { status: "ok", state: "pending", transaction: null };
     },
   };
 }

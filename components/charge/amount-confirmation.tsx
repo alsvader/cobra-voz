@@ -14,7 +14,7 @@ import {
 } from "@/modules/charges/amount";
 import { normalizeMxPhone } from "@/modules/charges/phone";
 
-export type CollectionMethod = "qr" | "pn";
+export type CollectionMethod = "qr" | "pn" | "link";
 
 export type ConfirmCharge = {
   cents: number;
@@ -108,7 +108,7 @@ export function AmountConfirmation({
   const cents = editing ? (parsed.ok ? parsed.cents : null) : initialCents;
   const phone = method === "pn" ? normalizeMxPhone(phoneDraft) : null;
   const locked = phase !== "idle";
-  const canConfirm = cents !== null && (method === "qr" || phone !== null);
+  const canConfirm = cents !== null && (method !== "pn" || phone !== null);
 
   // Un campo vacío no es un error que mostrar: aparecería al perder el foco y
   // desplazaría los botones justo cuando se toca «Cancelar», perdiendo el toque.
@@ -192,12 +192,13 @@ export function AmountConfirmation({
         <div
           role="radiogroup"
           aria-label="Forma de cobro"
-          className="grid grid-cols-2 gap-2"
+          className="grid grid-cols-3 gap-2"
         >
           {(
             [
               ["qr", "Código QR"],
               ["pn", "Notificación"],
+              ["link", "Enlace"],
             ] as const
           ).map(([value, label]) => {
             const selected = method === value;
@@ -211,8 +212,8 @@ export function AmountConfirmation({
                 onClick={() => setMethod(value)}
                 className={
                   selected
-                    ? "h-12 rounded-md border border-primary bg-secondary text-base font-semibold text-foreground"
-                    : "h-12 rounded-md border border-border bg-surface text-base font-semibold text-foreground"
+                    ? "h-12 rounded-md border border-primary bg-secondary px-1 text-sm font-semibold text-foreground"
+                    : "h-12 rounded-md border border-border bg-surface px-1 text-sm font-semibold text-foreground"
                 }
               >
                 {label}
@@ -223,7 +224,9 @@ export function AmountConfirmation({
         <p className="text-sm text-muted-foreground">
           {method === "qr"
             ? "Tu cliente escanea el código con su app bancaria."
-            : "Enviamos el cobro al celular que recibe CoDi."}
+            : method === "link"
+              ? "Tu cliente abre el enlace y paga desde su celular."
+              : "Enviamos el cobro al celular que recibe CoDi."}
         </p>
       </fieldset>
 
@@ -254,7 +257,9 @@ export function AmountConfirmation({
           {phase === "pending"
             ? method === "pn"
               ? "Enviando aviso…"
-              : "Generando código…"
+              : method === "link"
+                ? "Creando enlace…"
+                : "Generando código…"
             : phase === "accepted"
               ? "Importe confirmado"
               : "Confirmar importe"}

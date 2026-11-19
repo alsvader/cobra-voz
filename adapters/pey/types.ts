@@ -91,6 +91,44 @@ export type QueryPushPaymentOutcome =
     }
   | { status: "unavailable"; reason: string };
 
+export type CreatePaymentLinkRequest = {
+  chargeId: string;
+  /** Importe capturado. El enlace cobra esto, no el centavo del QR. */
+  amountCents: number;
+  expirationSeconds: number;
+  successUrl: string;
+  backUrl: string;
+};
+
+export type CreatePaymentLinkOutcome =
+  | {
+      status: "created";
+      peyPaymentLinkId: string;
+      url: string;
+      expiresAt: Date;
+    }
+  /** Pey respondió 400: el enlace no existe. No se reintenta esta intención. */
+  | { status: "rejected"; errorType: string }
+  /** 500, timeout o un 200 sin id ni url. No se reintenta a ciegas. */
+  | { status: "uncertain"; reason: string };
+
+export type PaymentLinkTransaction = {
+  transactionId: string;
+  /** Dinero liquidado, en centavos. */
+  amountCents: number;
+  /** `amountBreakdown.base`, o el total si Pey no lo separa. */
+  baseCents: number;
+  paidAt: Date;
+};
+
+export type QueryPaymentLinkOutcome =
+  | {
+      status: "ok";
+      state: "pending" | "processing" | "partial" | "paid";
+      transaction: PaymentLinkTransaction | null;
+    }
+  | { status: "unavailable"; reason: string };
+
 export interface PeyAdapter {
   /** Identifica la implementación (logs y rotulado de QR de prueba). */
   readonly kind: "mock" | "real";
@@ -108,4 +146,13 @@ export interface PeyAdapter {
    * notificación. Sin ese id no hay nada que consultar.
    */
   queryCodiPushPayment(transactionId: string): Promise<QueryPushPaymentOutcome>;
+  /** Una única llamada a `POST /payment-link/create`. Sin reintentos internos. */
+  createPaymentLink(
+    request: CreatePaymentLinkRequest,
+  ): Promise<CreatePaymentLinkOutcome>;
+  /**
+   * `GET /payment-link/:id` de un enlace que Pey ya devolvió. Sin id no hay
+   * nada que consultar.
+   */
+  queryPaymentLink(peyPaymentLinkId: string): Promise<QueryPaymentLinkOutcome>;
 }

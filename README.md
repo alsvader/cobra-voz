@@ -2,7 +2,7 @@
 
 **Cobra fácilmente, sin dejar de atender tu negocio.**
 
-PWA para pequeños comercios de México. Dictas o escribes un importe, lo confirmas y cobras con un código CoDi o con una notificación al celular del cliente. El pago cuenta cuando el banco lo verifica.
+PWA para pequeños comercios de México. Dictas o escribes un importe, lo confirmas y cobras con un código CoDi, con una notificación al celular del cliente o con un enlace de pago. El pago cuenta cuando el banco lo verifica.
 
 <p align="center">
   <img src="docs/readme/inicio.png" width="280" alt="Inicio de CobraVoz: micrófono para cobrar, total del día y movimientos recientes">
@@ -12,7 +12,7 @@ Las capturas son del comercio de demostración en local.
 
 ## Qué es
 
-CobraVoz es una aplicación web instalable. El comerciante cobra por CoDi con la voz, o con el teclado, como entrada del importe. Pey genera el código o envía el aviso al celular. CobraVoz sigue el cobro, muestra el resultado y guarda las ventas del día.
+CobraVoz es una aplicación web instalable. El comerciante cobra por CoDi con la voz, o con el teclado, como entrada del importe. Pey genera el código, envía el aviso al celular o crea un enlace. CobraVoz sigue el cobro, muestra el resultado y guarda las ventas del día.
 
 CobraVoz no procesa tarjetas, no mueve fondos por su cuenta y no sustituye un punto de venta. Es la interfaz de cobro y de seguimiento sobre Pey y CoDi.
 
@@ -23,8 +23,8 @@ Para quien atiende solo un puesto de comida, una fonda o un tianguis: muchos cob
 ## Qué hace
 
 - **Cobrar por voz o a mano.** En Inicio se mantiene pulsado el micrófono, o se escribe el importe.
-- **Confirmar antes de cobrar.** La cifra se revisa y se corrige. Nada se pide a Pey hasta pulsar «Confirmar importe». Ahí se elige «Código QR», que viene marcado, o «Notificación».
-- **Mostrar el cobro.** Con QR: importe, referencia, código y tiempo restante. Con notificación: el aviso va a un celular de 10 dígitos y la pantalla muestra los últimos 4, sin código. En local el QR se rotula como prueba.
+- **Confirmar antes de cobrar.** La cifra se revisa y se corrige. Nada se pide a Pey hasta pulsar «Confirmar importe». Ahí se elige «Código QR», que viene marcado, «Notificación» o «Enlace».
+- **Mostrar el cobro.** Con QR: importe, referencia, código y tiempo restante. Con notificación: el aviso va a un celular de 10 dígitos y la pantalla muestra los últimos 4, sin código. Con enlace: la dirección para copiar, la referencia y el tiempo. El comercio no abre esa página en su celular. En local el QR se rotula como prueba.
 - **Esperar al banco.** «Consultar nuevamente» lee el estado guardado. «Cerrar cobro» solo cierra la pantalla: no cancela el pago en el banco.
 - **Decir el pago recibido.** Si la pantalla de cobro está abierta y «Anunciar pagos» está activo, CobraVoz dice una vez «¡Pago recibido!» y el importe. El aviso en pantalla aparece igual.
 - **Ver el día.** El total y el historial suman únicamente pagos conciliados.
@@ -33,10 +33,10 @@ Para quien atiende solo un puesto de comida, una fonda o un tianguis: muchos cob
 
 1. En Inicio dices el importe, o eliges «Ingresar importe manualmente».
 2. CobraVoz muestra la cantidad. Si la voz no se entiende, vuelves a hablar o la escribes. No se asume un monto.
-3. Pulsas «Confirmar importe». Si elegiste notificación, escribes antes los 10 dígitos del celular, sin lada. Esa acción crea la intención de cobro.
-4. Si Pey responde, la pantalla muestra el QR o confirma que el aviso salió. El importe de esa solicitud ya no cambia.
-5. El cliente paga con su app bancaria: escanea el código o acepta la notificación.
-6. Un aviso firmado, o una conciliación que coincide en el código o en el aviso, el importe, la referencia y la cuenta, marca el cobro como pagado y la pantalla muestra «¡Pago recibido!». Con la pestaña abierta y «Anunciar pagos» activo, también lo dice una sola vez. Un aviso que no coincide queda como incidencia y no entra en las ventas.
+3. Pulsas «Confirmar importe». Si elegiste notificación, escribes antes los 10 dígitos del celular, sin lada. El enlace no pide celular. Esa acción crea la intención de cobro.
+4. Si Pey responde, la pantalla muestra el QR, confirma que el aviso salió o muestra el enlace para copiar. El importe de esa solicitud ya no cambia.
+5. El cliente paga con su app bancaria: escanea el código, acepta la notificación o abre el enlace.
+6. Un aviso firmado, o una conciliación que coincide, marca el cobro como pagado y la pantalla muestra «¡Pago recibido!». En QR y notificación se comparan el instrumento, el importe, la referencia y la cuenta. En el enlace se compara la base del pago con el importe del cobro; la propina y la comisión no son un desajuste. Con la pestaña abierta y «Anunciar pagos» activo, también lo dice una sola vez. Un aviso que no coincide queda como incidencia y no entra en las ventas.
 7. Al volver a Inicio o a Ventas, el pago conciliado aparece en el total del día.
 
 <p align="center">
@@ -47,8 +47,8 @@ El recorrido de arriba usa la captura manual de $150.00 en el simulador local.
 
 ### Así está el piloto
 
-- En local y en preview responde el simulador, aunque exista una clave de Pey. El QR dice «QR de prueba · no sirve para pagar». El importe **$13.01** deja la creación en estado incierto, en QR y en notificación. **$13.02**, al pulsar «Consultar nuevamente», marca pagado ese cobro de prueba.
-- En producción, con `PEY_API_KEY`, el QR y la notificación bancarios son siempre de **$0.01**. El importe confirmado en la app se guarda y se muestra como la venta de ejemplo. El banco mueve un centavo, y ese centavo concilia el cobro. El total del día suma ese centavo, venga el pago de un QR o de una notificación.
+- En local y en preview responde el simulador, aunque exista una clave de Pey. El QR dice «QR de prueba · no sirve para pagar». El importe **$13.01** deja la creación en estado incierto, en QR, en notificación y en enlace. **$13.02**, al pulsar «Consultar nuevamente», marca pagado ese cobro de prueba. **$13.03** simula que la consulta no responde.
+- En producción, con `PEY_API_KEY`, el QR y la notificación bancarios son siempre de **$0.01**. El enlace cobra el importe capturado. El importe confirmado en la app se guarda y se muestra como la venta. En QR y notificación el banco mueve un centavo, y ese centavo concilia el cobro. El total del día suma el dinero recibido, venga de un QR, de una notificación o de un enlace.
 - La notificación no guarda el celular completo: solo un resumen y los últimos 4 dígitos.
 - Con «Anunciar pagos» activo, un pago que la pantalla de cobro ve llegar se dice una sola vez: «¡Pago recibido!» y el importe en palabras. Hace falta la pestaña abierta. El aviso en pantalla aparece igual si el audio no sale.
 
@@ -69,30 +69,35 @@ El recorrido de arriba usa la captura manual de $150.00 en el simulador local.
   </tr>
   <tr>
     <td align="center">
-      <img src="docs/readme/confirmar.png" width="240" alt="Confirmación de $150.00 con la notificación elegida y el celular del cliente">
+      <img src="docs/readme/confirmar.png" width="240" alt="Confirmación de $150.00 con Enlace elegido y sin celular">
       <br><strong>Confirmación</strong>
-      <br>La cifra se ve grande. Se elige código o notificación y, si es aviso, el celular.
+      <br>La cifra se ve grande. Se elige código, notificación o enlace. El enlace no pide celular.
     </td>
+    <td align="center">
+      <img src="docs/readme/enlace.png" width="240" alt="Cobro en espera con el enlace de pago para copiar">
+      <br><strong>Enlace</strong>
+      <br>Se copia la dirección. El pago se abre en el celular del cliente.
+    </td>
+  </tr>
+  <tr>
     <td align="center">
       <img src="docs/readme/aviso.png" width="240" alt="Cobro en espera tras enviar la notificación al celular terminado en 5678">
       <br><strong>Aviso</strong>
       <br>El cobro ya salió. Se ven los últimos 4 dígitos y el tiempo que queda.
     </td>
-  </tr>
-  <tr>
     <td align="center">
       <img src="docs/readme/cobro.png" width="240" alt="Cobro CoDi en espera, con QR de prueba, referencia y tiempo restante">
       <br><strong>Cobro con código</strong>
       <br>El código, la referencia y el tiempo que queda.
     </td>
+  </tr>
+  <tr>
     <td align="center">
       <img src="docs/readme/ventas.png" width="240" alt="Ventas con el total del día y el historial de movimientos">
       <br><strong>Ventas</strong>
       <br>Total del día e historial. Solo suma lo conciliado.
     </td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2">
+    <td align="center">
       <img src="docs/readme/configuracion.png" width="240" alt="Configuración del comercio, la cuenta receptora y la preferencia de audio">
       <br><strong>Configuración</strong>
       <br>Comercio, cuenta receptora y preferencia de audio.
@@ -136,19 +141,23 @@ máx. 2 decimales, > 0). P02 (`/cobro/confirmar`) exige la acción explícita
 
 `POST /api/charges` crea la intención (idempotente por `idempotencyKey`, persistida
 **antes** de llamar a Pey) y `GET /api/charges/:id` la consulta. El cuerpo lleva
-`method`: `qr` (default) o `pn`. La notificación exige `phoneNumber` de 10 dígitos,
-sin lada. El `merchantId` sale siempre de la sesión. Repetir la petición devuelve
-el mismo cobro sin volver a llamar a Pey; cambiar el importe, la forma de cobro o
-el celular es otro cobro. Si Pey no confirma el QR o el aviso, el cobro queda en
-`qr_uncertain` y no se reintenta a ciegas. En Local/Preview responde el simulador
-(`adapters/pey`), aunque exista `PEY_API_KEY`: el importe **$13.01** fuerza un
-resultado incierto. En producción, con `PEY_API_KEY`, el cliente es el real y el
-movimiento bancario, de QR o de notificación, es de **$0.01**. Sin clave, fuera
-de local y preview, `POST /api/charges` responde 503 y no crea la intención.
+`method`: `qr` (default), `pn` o `link`. La notificación exige `phoneNumber` de 10
+dígitos, sin lada. El enlace no lleva celular. El `merchantId` sale siempre de la
+sesión. Repetir la petición devuelve el mismo cobro sin volver a llamar a Pey;
+cambiar el importe, la forma de cobro o el celular es otro cobro. Si Pey no
+confirma el QR, el aviso o el enlace, el cobro queda en `qr_uncertain` y no se
+reintenta a ciegas. Un HTTP 400 al crear el enlace cierra esa intención: el enlace
+no existe y `creationResult` queda `rejected`. En Local/Preview responde el
+simulador (`adapters/pey`), aunque exista `PEY_API_KEY`: el importe **$13.01**
+fuerza un resultado incierto. En producción, con `PEY_API_KEY`, el cliente es el
+real. El movimiento bancario de QR o de notificación es de **$0.01**. El enlace
+cobra el importe capturado. Sin clave, fuera de local y preview,
+`POST /api/charges` responde 503 y no crea la intención.
 
 P03 (`/cobro/[id]`) es una sola pantalla con variantes según el estado **persistido**:
 generando el instrumento, esperando pago (QR dibujado localmente desde el
-`qrString` guardado, o aviso enviado con los últimos 4 del celular, sin código),
+`qrString` guardado, aviso enviado con los últimos 4 del celular, o enlace para
+copiar, sin abrir la página de pago en el celular del comercio),
 importe, referencia y tiempo restante, verificación no disponible, pagado, expirado,
 cerrado localmente, creación incierta e incidencia. Reglas:
 
@@ -173,12 +182,16 @@ Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`) con
 vale y el aviso coincide en el instrumento, importe, referencia numérica y cuenta,
 el cobro pasa a `paid` en la misma transacción, también si ya estaba vencido o
 cerrado en local. El aviso de un QR trae el identificador del código. El de una
-notificación trae el `transactionId` guardado al crearla; no trae el celular. Un
-importe, cuenta o referencia distintos deja el pago como incidencia y no lo cuenta
-como venta. El mismo `webhook-id` o el mismo `transactionId` no crean otro pago.
-Un aviso de un código o de una notificación que CobraVoz no tiene no crea un cobro.
-Si el aviso no llega, la conciliación (PR-08) consulta a Pey y acredita el cobro
-solo cuando la evidencia coincide. El mismo cron revisa QR y notificaciones.
+notificación trae el `transactionId` guardado al crearla; no trae el celular. El
+de un enlace es `payment_link.status_updated` y se casa por `paymentLinkId`.
+`pending`, `processing` y `partial` no cierran el cobro. Solo `paid` con una
+transacción cuya base coincide con el importe del cobro lo cierra; el dinero
+guardado es el liquidado. Un importe, cuenta o referencia distintos deja el pago
+como incidencia y no lo cuenta como venta. El mismo `webhook-id` o el mismo
+`transactionId` no crean otro pago. Un aviso de un código, de una notificación o
+de un enlace que CobraVoz no tiene no crea un cobro. Si el aviso no llega, la
+conciliación (PR-08) consulta a Pey y acredita el cobro solo cuando la evidencia
+coincide. El mismo cron revisa QR, notificaciones y enlaces.
 
 ### Autenticación y autorización
 
@@ -187,6 +200,8 @@ solo cuando la evidencia coincide. El mismo cron revisa QR y notificaciones.
   `auth.getUser()` + vínculo `merchant_users` (`modules/identity`).
 - El `merchant_id` **siempre sale de la sesión**, nunca del cliente.
 - Rutas privadas: `/inicio`, `/configuracion`, `/cobro/*` (y `/api/*` con 401/403 propios).
+- `/enlace/pago-completado` y `/enlace/pago-cancelado` son públicas. Pey devuelve
+  ahí al cliente. No marcan el cobro como pagado.
 - Los Route Handlers que mutan usan `withMerchantApi` (comprueba `Origin` y responde
   `Cache-Control: private, no-store`). Los Server Actions ya validan `Origin`.
 - `npm run check:bundle` (tras `build`) falla si un secreto de servidor llega al cliente.

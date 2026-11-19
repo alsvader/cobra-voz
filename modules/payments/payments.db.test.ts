@@ -8,6 +8,7 @@ import {
   merchants,
   paymentEvents,
   paymentIncidents,
+  paymentLinks,
   payments,
 } from "@/adapters/db/schema";
 import { createTestDb } from "@/adapters/db/testing";
@@ -124,6 +125,18 @@ afterEach(async () => {
       await db
         .delete(codiNotifications)
         .where(inArray(codiNotifications.chargeId, chargeIds));
+    }
+    const linkRows = await db
+      .select({ id: paymentLinks.id })
+      .from(paymentLinks)
+      .where(inArray(paymentLinks.chargeId, chargeIds));
+    const linkIds = linkRows.map((row) => row.id);
+    if (linkIds.length > 0) {
+      await db
+        .delete(paymentEvents)
+        .where(inArray(paymentEvents.paymentLinkId, linkIds));
+      await db.delete(payments).where(inArray(payments.paymentLinkId, linkIds));
+      await db.delete(paymentLinks).where(inArray(paymentLinks.id, linkIds));
     }
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
@@ -439,6 +452,136 @@ describe("recordPeyPayment", () => {
       numRef: note.numRef,
       bankAccountId: merchant.peyBankAccountId,
       paidAt: new Date(),
+      chargeId: "00000000-0000-4000-8000-000000000099",
+    });
+
+    expect(result.outcome).toBe("incident");
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, created.charge.id));
+    expect(row.status).toBe("incident");
+  });
+
+  it("un enlace pagado guarda el dinero liquidado si la base coincide", async () => {
+    const merchant = await newMerchant();
+    const created = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      { amountCents: 10000, idempotencyKey: randomUUID(), method: "link" },
+    );
+    if (!created.ok) throw new Error("setup");
+    const [link] = await db
+      .select()
+      .from(paymentLinks)
+      .where(eq(paymentLinks.chargeId, created.charge.id));
+
+    const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "link",
+      paymentLinkId: link.peyPaymentLinkId,
+      settles: true,
+      transactionId: `tx-${randomUUID()}`,
+      amountCents: 11850,
+      baseCents: 10000,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+      chargeId: created.charge.id,
+    });
+
+    expect(result).toEqual({ outcome: "paid", duplicate: false });
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.paymentLinkId, link.id));
+    expect(payment.amountCents).toBe(11850);
+    expect(payment.codiQrId).toBeNull();
+    expect(payment.codiNotificationId).toBeNull();
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, created.charge.id));
+    expect(row.status).toBe("paid");
+  });
+
+  it("un enlace pendiente no cierra el cobro", async () => {
+    const merchant = await newMerchant();
+    const created = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      { amountCents: 10000, idempotencyKey: randomUUID(), method: "link" },
+    );
+    if (!created.ok) throw new Error("setup");
+    const [link] = await db
+      .select()
+      .from(paymentLinks)
+      .where(eq(paymentLinks.chargeId, created.charge.id));
+
+    const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "link",
+      paymentLinkId: link.peyPaymentLinkId,
+      settles: false,
+      transactionId: null,
+      amountCents: 0,
+      baseCents: 0,
+      paidAt: new Date(0),
+      chargeId: null,
+    });
+
+    expect(result).toEqual({ outcome: "ignored", duplicate: false });
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, created.charge.id));
+    expect(row.status).toBe("waiting_payment");
+  });
+
+  it("un enlace desconocido no crea un cobro", async () => {
+    const paymentLinkId = `link-${randomUUID()}`;
+    const transactionId = `tx-${randomUUID()}`;
+    const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "link",
+      paymentLinkId,
+      settles: true,
+      transactionId,
+      amountCents: 10000,
+      baseCents: 10000,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+      chargeId: null,
+    });
+
+    expect(result.outcome).toBe("incident");
+    const links = await db
+      .select({ id: paymentLinks.id })
+      .from(paymentLinks)
+      .where(eq(paymentLinks.peyPaymentLinkId, paymentLinkId));
+    const paymentRows = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(eq(payments.providerTransactionId, transactionId));
+    expect(links).toHaveLength(0);
+    expect(paymentRows).toHaveLength(0);
+  });
+
+  it("una referencia distinta en el enlace queda como incidencia", async () => {
+    const merchant = await newMerchant();
+    const created = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      { amountCents: 10000, idempotencyKey: randomUUID(), method: "link" },
+    );
+    if (!created.ok) throw new Error("setup");
+    const [link] = await db
+      .select()
+      .from(paymentLinks)
+      .where(eq(paymentLinks.chargeId, created.charge.id));
+
+    const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "link",
+      paymentLinkId: link.peyPaymentLinkId,
+      settles: true,
+      transactionId: `tx-${randomUUID()}`,
+      amountCents: 10000,
+      baseCents: 10000,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
       chargeId: "00000000-0000-4000-8000-000000000099",
     });
 

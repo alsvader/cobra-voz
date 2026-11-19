@@ -19,15 +19,15 @@ export const createChargeSchema = z
   .strictObject({
     amountCents: z.number().refine(isValidAmountCents, "Importe no válido."),
     idempotencyKey: idempotencyKeySchema,
-    method: z.enum(["qr", "pn"]).default("qr"),
+    method: z.enum(["qr", "pn", "link"]).default("qr"),
     phoneNumber: z.string().max(32).optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.method === "qr") {
+    if (value.method === "qr" || value.method === "link") {
       if (value.phoneNumber != null) {
         ctx.addIssue({
           code: "custom",
-          message: "El cobro por QR no lleva celular.",
+          message: "Este cobro no lleva celular.",
           path: ["phoneNumber"],
         });
       }
@@ -42,11 +42,11 @@ export const createChargeSchema = z
     }
   })
   .transform((value) => {
-    if (value.method === "qr") {
+    if (value.method === "qr" || value.method === "link") {
       return {
         amountCents: value.amountCents,
         idempotencyKey: value.idempotencyKey,
-        method: "qr" as const,
+        method: value.method,
         phoneNumber: null,
       };
     }

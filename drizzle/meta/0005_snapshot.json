@@ -1,0 +1,1581 @@
+{
+  "id": "43efc713-517a-47bb-9908-6f90b5a7f878",
+  "prevId": "e36de605-a201-4f31-8ac8-f3f01d750072",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.merchant_preferences": {
+      "name": "merchant_preferences",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "merchant_id": {
+          "name": "merchant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "voice_announcements_enabled": {
+          "name": "voice_announcements_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "merchant_preferences_merchant_id_merchants_id_fk": {
+          "name": "merchant_preferences_merchant_id_merchants_id_fk",
+          "tableFrom": "merchant_preferences",
+          "tableTo": "merchants",
+          "columnsFrom": [
+            "merchant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "merchant_preferences_merchant_id_key": {
+          "name": "merchant_preferences_merchant_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "merchant_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.merchant_users": {
+      "name": "merchant_users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "merchant_id": {
+          "name": "merchant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "merchant_users_merchant_id_idx": {
+          "name": "merchant_users_merchant_id_idx",
+          "columns": [
+            {
+              "expression": "merchant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "merchant_users_user_id_users_id_fk": {
+          "name": "merchant_users_user_id_users_id_fk",
+          "tableFrom": "merchant_users",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "merchant_users_merchant_id_merchants_id_fk": {
+          "name": "merchant_users_merchant_id_merchants_id_fk",
+          "tableFrom": "merchant_users",
+          "tableTo": "merchants",
+          "columnsFrom": [
+            "merchant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "merchant_users_user_id_key": {
+          "name": "merchant_users_user_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.merchants": {
+      "name": "merchants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'America/Mexico_City'"
+        },
+        "pey_bank_account_id": {
+          "name": "pey_bank_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "receiving_account_label": {
+          "name": "receiving_account_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.charges": {
+      "name": "charges",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "merchant_id": {
+          "name": "merchant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_cents": {
+          "name": "amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'MXN'"
+        },
+        "status": {
+          "name": "status",
+          "type": "charge_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'created'"
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "paid_payment_id": {
+          "name": "paid_payment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_reconciliation_at": {
+          "name": "last_reconciliation_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "collection_method": {
+          "name": "collection_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'qr'"
+        },
+        "creation_result": {
+          "name": "creation_result",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_hash": {
+          "name": "phone_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_last4": {
+          "name": "phone_last4",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "charges_merchant_created_idx": {
+          "name": "charges_merchant_created_idx",
+          "columns": [
+            {
+              "expression": "merchant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "charges_merchant_status_idx": {
+          "name": "charges_merchant_status_idx",
+          "columns": [
+            {
+              "expression": "merchant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "charges_expires_at_idx": {
+          "name": "charges_expires_at_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "charges_last_reconciliation_at_idx": {
+          "name": "charges_last_reconciliation_at_idx",
+          "columns": [
+            {
+              "expression": "last_reconciliation_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "charges_merchant_id_merchants_id_fk": {
+          "name": "charges_merchant_id_merchants_id_fk",
+          "tableFrom": "charges",
+          "tableTo": "merchants",
+          "columnsFrom": [
+            "merchant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "charges_paid_payment_id_payments_id_fk": {
+          "name": "charges_paid_payment_id_payments_id_fk",
+          "tableFrom": "charges",
+          "tableTo": "payments",
+          "columnsFrom": [
+            "paid_payment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "charges_merchant_idempotency_key": {
+          "name": "charges_merchant_idempotency_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "merchant_id",
+            "idempotency_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "charges_amount_cents_positive": {
+          "name": "charges_amount_cents_positive",
+          "value": "\"charges\".\"amount_cents\" > 0"
+        },
+        "charges_currency_mxn": {
+          "name": "charges_currency_mxn",
+          "value": "\"charges\".\"currency\" = 'MXN'"
+        },
+        "charges_paid_requires_payment": {
+          "name": "charges_paid_requires_payment",
+          "value": "\"charges\".\"status\" <> 'paid' OR \"charges\".\"paid_payment_id\" IS NOT NULL"
+        },
+        "charges_locally_closed_requires_closed_at": {
+          "name": "charges_locally_closed_requires_closed_at",
+          "value": "\"charges\".\"status\" <> 'locally_closed' OR \"charges\".\"closed_at\" IS NOT NULL"
+        },
+        "charges_collection_method": {
+          "name": "charges_collection_method",
+          "value": "\"charges\".\"collection_method\" in ('qr', 'pn', 'link')"
+        },
+        "charges_phone_matches_method": {
+          "name": "charges_phone_matches_method",
+          "value": "(\n        \"charges\".\"collection_method\" in ('qr', 'link')\n        AND \"charges\".\"phone_hash\" IS NULL\n        AND \"charges\".\"phone_last4\" IS NULL\n      ) OR (\n        \"charges\".\"collection_method\" = 'pn'\n        AND \"charges\".\"phone_hash\" ~ '^[0-9a-f]{64}$'\n        AND \"charges\".\"phone_last4\" ~ '^[0-9]{4}$'\n      )"
+        },
+        "charges_creation_result": {
+          "name": "charges_creation_result",
+          "value": "\"charges\".\"creation_result\" IS NULL OR \"charges\".\"creation_result\" in ('uncertain', 'rejected')"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.codi_notifications": {
+      "name": "codi_notifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "charge_id": {
+          "name": "charge_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pey_transaction_id": {
+          "name": "pey_transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "codi_id": {
+          "name": "codi_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "num_ref": {
+          "name": "num_ref",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone_last4": {
+          "name": "phone_last4",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "codi_notifications_num_ref_idx": {
+          "name": "codi_notifications_num_ref_idx",
+          "columns": [
+            {
+              "expression": "num_ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "codi_notifications_charge_id_charges_id_fk": {
+          "name": "codi_notifications_charge_id_charges_id_fk",
+          "tableFrom": "codi_notifications",
+          "tableTo": "charges",
+          "columnsFrom": [
+            "charge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "codi_notifications_charge_id_key": {
+          "name": "codi_notifications_charge_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "charge_id"
+          ]
+        },
+        "codi_notifications_pey_transaction_id_key": {
+          "name": "codi_notifications_pey_transaction_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "pey_transaction_id"
+          ]
+        },
+        "codi_notifications_codi_id_key": {
+          "name": "codi_notifications_codi_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "codi_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "codi_notifications_num_ref_max_7_digits": {
+          "name": "codi_notifications_num_ref_max_7_digits",
+          "value": "\"codi_notifications\".\"num_ref\" BETWEEN 0 AND 9999999"
+        },
+        "codi_notifications_phone_last4": {
+          "name": "codi_notifications_phone_last4",
+          "value": "\"codi_notifications\".\"phone_last4\" ~ '^[0-9]{4}$'"
+        },
+        "codi_notifications_codi_id_token": {
+          "name": "codi_notifications_codi_id_token",
+          "value": "\"codi_notifications\".\"codi_id\" ~ '^[A-Za-z0-9][A-Za-z0-9+/=._:-]{0,63}$'"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.codi_qrs": {
+      "name": "codi_qrs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "charge_id": {
+          "name": "charge_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pey_qr_id": {
+          "name": "pey_qr_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "num_ref": {
+          "name": "num_ref",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qr_payload": {
+          "name": "qr_payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "codi_qrs_num_ref_idx": {
+          "name": "codi_qrs_num_ref_idx",
+          "columns": [
+            {
+              "expression": "num_ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "codi_qrs_charge_id_charges_id_fk": {
+          "name": "codi_qrs_charge_id_charges_id_fk",
+          "tableFrom": "codi_qrs",
+          "tableTo": "charges",
+          "columnsFrom": [
+            "charge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "codi_qrs_charge_id_key": {
+          "name": "codi_qrs_charge_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "charge_id"
+          ]
+        },
+        "codi_qrs_pey_qr_id_key": {
+          "name": "codi_qrs_pey_qr_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "pey_qr_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "codi_qrs_num_ref_max_7_digits": {
+          "name": "codi_qrs_num_ref_max_7_digits",
+          "value": "\"codi_qrs\".\"num_ref\" BETWEEN 0 AND 9999999"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.payment_events": {
+      "name": "payment_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pey'"
+        },
+        "webhook_id": {
+          "name": "webhook_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "validation_status": {
+          "name": "validation_status",
+          "type": "payment_event_validation",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "processing_status": {
+          "name": "processing_status",
+          "type": "payment_event_processing",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "provider_transaction_id": {
+          "name": "provider_transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_qr_id": {
+          "name": "provider_qr_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "codi_qr_id": {
+          "name": "codi_qr_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "codi_notification_id": {
+          "name": "codi_notification_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_link_id": {
+          "name": "payment_link_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_id": {
+          "name": "payment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "processed_at": {
+          "name": "processed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payment_events_provider_transaction_idx": {
+          "name": "payment_events_provider_transaction_idx",
+          "columns": [
+            {
+              "expression": "provider_transaction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_events_codi_qr_id_idx": {
+          "name": "payment_events_codi_qr_id_idx",
+          "columns": [
+            {
+              "expression": "codi_qr_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_events_codi_notification_id_idx": {
+          "name": "payment_events_codi_notification_id_idx",
+          "columns": [
+            {
+              "expression": "codi_notification_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_events_payment_link_id_idx": {
+          "name": "payment_events_payment_link_id_idx",
+          "columns": [
+            {
+              "expression": "payment_link_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_events_processing_status_idx": {
+          "name": "payment_events_processing_status_idx",
+          "columns": [
+            {
+              "expression": "processing_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payment_events_codi_qr_id_codi_qrs_id_fk": {
+          "name": "payment_events_codi_qr_id_codi_qrs_id_fk",
+          "tableFrom": "payment_events",
+          "tableTo": "codi_qrs",
+          "columnsFrom": [
+            "codi_qr_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "payment_events_codi_notification_id_codi_notifications_id_fk": {
+          "name": "payment_events_codi_notification_id_codi_notifications_id_fk",
+          "tableFrom": "payment_events",
+          "tableTo": "codi_notifications",
+          "columnsFrom": [
+            "codi_notification_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "payment_events_payment_link_id_payment_links_id_fk": {
+          "name": "payment_events_payment_link_id_payment_links_id_fk",
+          "tableFrom": "payment_events",
+          "tableTo": "payment_links",
+          "columnsFrom": [
+            "payment_link_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "payment_events_payment_id_payments_id_fk": {
+          "name": "payment_events_payment_id_payments_id_fk",
+          "tableFrom": "payment_events",
+          "tableTo": "payments",
+          "columnsFrom": [
+            "payment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payment_events_provider_webhook_key": {
+          "name": "payment_events_provider_webhook_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "provider",
+            "webhook_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.payment_incidents": {
+      "name": "payment_incidents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "charge_id": {
+          "name": "charge_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_id": {
+          "name": "payment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_event_id": {
+          "name": "payment_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "payment_incident_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "payment_incident_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payment_incidents_charge_id_idx": {
+          "name": "payment_incidents_charge_id_idx",
+          "columns": [
+            {
+              "expression": "charge_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_incidents_payment_id_idx": {
+          "name": "payment_incidents_payment_id_idx",
+          "columns": [
+            {
+              "expression": "payment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_incidents_status_idx": {
+          "name": "payment_incidents_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payment_incidents_charge_id_charges_id_fk": {
+          "name": "payment_incidents_charge_id_charges_id_fk",
+          "tableFrom": "payment_incidents",
+          "tableTo": "charges",
+          "columnsFrom": [
+            "charge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "payment_incidents_payment_id_payments_id_fk": {
+          "name": "payment_incidents_payment_id_payments_id_fk",
+          "tableFrom": "payment_incidents",
+          "tableTo": "payments",
+          "columnsFrom": [
+            "payment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "payment_incidents_payment_event_id_payment_events_id_fk": {
+          "name": "payment_incidents_payment_event_id_payment_events_id_fk",
+          "tableFrom": "payment_incidents",
+          "tableTo": "payment_events",
+          "columnsFrom": [
+            "payment_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "payment_incidents_has_reference": {
+          "name": "payment_incidents_has_reference",
+          "value": "\"payment_incidents\".\"charge_id\" IS NOT NULL OR \"payment_incidents\".\"payment_id\" IS NOT NULL OR \"payment_incidents\".\"payment_event_id\" IS NOT NULL"
+        },
+        "payment_incidents_resolved_requires_resolved_at": {
+          "name": "payment_incidents_resolved_requires_resolved_at",
+          "value": "\"payment_incidents\".\"status\" <> 'resolved' OR \"payment_incidents\".\"resolved_at\" IS NOT NULL"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.payment_links": {
+      "name": "payment_links",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "charge_id": {
+          "name": "charge_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pey_payment_link_id": {
+          "name": "pey_payment_link_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payment_links_charge_id_charges_id_fk": {
+          "name": "payment_links_charge_id_charges_id_fk",
+          "tableFrom": "payment_links",
+          "tableTo": "charges",
+          "columnsFrom": [
+            "charge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payment_links_charge_id_key": {
+          "name": "payment_links_charge_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "charge_id"
+          ]
+        },
+        "payment_links_pey_payment_link_id_key": {
+          "name": "payment_links_pey_payment_link_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "pey_payment_link_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "payment_links_url_https": {
+          "name": "payment_links_url_https",
+          "value": "\"payment_links\".\"url\" ~ '^https://'"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.payments": {
+      "name": "payments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "codi_qr_id": {
+          "name": "codi_qr_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "codi_notification_id": {
+          "name": "codi_notification_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_link_id": {
+          "name": "payment_link_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pey'"
+        },
+        "provider_transaction_id": {
+          "name": "provider_transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_cents": {
+          "name": "amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reconciliation_status": {
+          "name": "reconciliation_status",
+          "type": "payment_reconciliation_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_source": {
+          "name": "evidence_source",
+          "type": "payment_evidence_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "paid_at": {
+          "name": "paid_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "reconciled_at": {
+          "name": "reconciled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payments_codi_qr_id_idx": {
+          "name": "payments_codi_qr_id_idx",
+          "columns": [
+            {
+              "expression": "codi_qr_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payments_codi_notification_id_idx": {
+          "name": "payments_codi_notification_id_idx",
+          "columns": [
+            {
+              "expression": "codi_notification_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payments_payment_link_id_idx": {
+          "name": "payments_payment_link_id_idx",
+          "columns": [
+            {
+              "expression": "payment_link_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payments_paid_at_idx": {
+          "name": "payments_paid_at_idx",
+          "columns": [
+            {
+              "expression": "paid_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payments_reconciliation_status_idx": {
+          "name": "payments_reconciliation_status_idx",
+          "columns": [
+            {
+              "expression": "reconciliation_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payments_codi_qr_id_codi_qrs_id_fk": {
+          "name": "payments_codi_qr_id_codi_qrs_id_fk",
+          "tableFrom": "payments",
+          "tableTo": "codi_qrs",
+          "columnsFrom": [
+            "codi_qr_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "payments_codi_notification_id_codi_notifications_id_fk": {
+          "name": "payments_codi_notification_id_codi_notifications_id_fk",
+          "tableFrom": "payments",
+          "tableTo": "codi_notifications",
+          "columnsFrom": [
+            "codi_notification_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "payments_payment_link_id_payment_links_id_fk": {
+          "name": "payments_payment_link_id_payment_links_id_fk",
+          "tableFrom": "payments",
+          "tableTo": "payment_links",
+          "columnsFrom": [
+            "payment_link_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payments_provider_transaction_key": {
+          "name": "payments_provider_transaction_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "provider",
+            "provider_transaction_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "payments_amount_cents_positive": {
+          "name": "payments_amount_cents_positive",
+          "value": "\"payments\".\"amount_cents\" > 0"
+        },
+        "payments_reconciled_requires_reconciled_at": {
+          "name": "payments_reconciled_requires_reconciled_at",
+          "value": "\"payments\".\"reconciliation_status\" <> 'reconciled' OR \"payments\".\"reconciled_at\" IS NOT NULL"
+        },
+        "payments_one_instrument": {
+          "name": "payments_one_instrument",
+          "value": "(\n        \"payments\".\"codi_qr_id\" IS NOT NULL\n        AND \"payments\".\"codi_notification_id\" IS NULL\n        AND \"payments\".\"payment_link_id\" IS NULL\n      ) OR (\n        \"payments\".\"codi_qr_id\" IS NULL\n        AND \"payments\".\"codi_notification_id\" IS NOT NULL\n        AND \"payments\".\"payment_link_id\" IS NULL\n      ) OR (\n        \"payments\".\"codi_qr_id\" IS NULL\n        AND \"payments\".\"codi_notification_id\" IS NULL\n        AND \"payments\".\"payment_link_id\" IS NOT NULL\n      )"
+        }
+      },
+      "isRLSEnabled": true
+    }
+  },
+  "enums": {
+    "public.charge_status": {
+      "name": "charge_status",
+      "schema": "public",
+      "values": [
+        "created",
+        "qr_uncertain",
+        "waiting_payment",
+        "paid",
+        "expired",
+        "locally_closed",
+        "incident"
+      ]
+    },
+    "public.payment_event_processing": {
+      "name": "payment_event_processing",
+      "schema": "public",
+      "values": [
+        "pending",
+        "applied",
+        "incident",
+        "ignored"
+      ]
+    },
+    "public.payment_event_validation": {
+      "name": "payment_event_validation",
+      "schema": "public",
+      "values": [
+        "verified",
+        "mismatch"
+      ]
+    },
+    "public.payment_evidence_source": {
+      "name": "payment_evidence_source",
+      "schema": "public",
+      "values": [
+        "webhook",
+        "provider_query"
+      ]
+    },
+    "public.payment_incident_status": {
+      "name": "payment_incident_status",
+      "schema": "public",
+      "values": [
+        "open",
+        "investigating",
+        "resolved"
+      ]
+    },
+    "public.payment_incident_type": {
+      "name": "payment_incident_type",
+      "schema": "public",
+      "values": [
+        "amount_mismatch",
+        "unknown_qr",
+        "account_mismatch",
+        "reference_mismatch",
+        "late_payment",
+        "qr_creation_uncertain",
+        "other"
+      ]
+    },
+    "public.payment_reconciliation_status": {
+      "name": "payment_reconciliation_status",
+      "schema": "public",
+      "values": [
+        "reconciled",
+        "incident"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

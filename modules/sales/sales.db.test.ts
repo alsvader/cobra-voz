@@ -6,6 +6,7 @@ import {
   codiNotifications,
   codiQrs,
   merchants,
+  paymentLinks,
   payments,
 } from "@/adapters/db/schema";
 import { createTestDb } from "@/adapters/db/testing";
@@ -39,8 +40,8 @@ async function addCharge(
     reconciliationStatus?: "reconciled" | "incident";
     /** Importe del pago. Si no viene, es el mismo que el cobro. */
     receivedCents?: number;
-    /** `pn` guarda el pago en la notificación, sin QR. */
-    method?: "qr" | "pn";
+    /** `pn` guarda el pago en la notificación. `link`, en el enlace. */
+    method?: "qr" | "pn" | "link";
   } = {},
 ) {
   const amountCents = options.amountCents ?? 15050;
@@ -82,17 +83,28 @@ async function addCharge(
             })
             .returning()
             .then((rows) => rows[0])
-        : await db
-            .insert(codiQrs)
-            .values({
-              chargeId: charge.id,
-              peyQrId: `qr-${randomUUID()}`,
-              numRef: 123456,
-              qrPayload: `COBRAVOZ-MOCK|${charge.id}`,
-              expiresAt: new Date(createdAt.getTime() + 600_000),
-            })
-            .returning()
-            .then((rows) => rows[0]);
+        : method === "link"
+          ? await db
+              .insert(paymentLinks)
+              .values({
+                chargeId: charge.id,
+                peyPaymentLinkId: `link-${randomUUID()}`,
+                url: `https://app.mipey.mx/payment-link/${charge.id}`,
+                expiresAt: new Date(createdAt.getTime() + 600_000),
+              })
+              .returning()
+              .then((rows) => rows[0])
+          : await db
+              .insert(codiQrs)
+              .values({
+                chargeId: charge.id,
+                peyQrId: `qr-${randomUUID()}`,
+                numRef: 123456,
+                qrPayload: `COBRAVOZ-MOCK|${charge.id}`,
+                expiresAt: new Date(createdAt.getTime() + 600_000),
+              })
+              .returning()
+              .then((rows) => rows[0]);
     if (options.paidAt || options.reconciliationStatus) {
       const reconciled =
         (options.reconciliationStatus ?? "reconciled") === "reconciled";
@@ -101,6 +113,7 @@ async function addCharge(
         .values({
           codiQrId: method === "qr" ? instrument.id : null,
           codiNotificationId: method === "pn" ? instrument.id : null,
+          paymentLinkId: method === "link" ? instrument.id : null,
           providerTransactionId: `tx-${randomUUID()}`,
           amountCents: options.receivedCents ?? amountCents,
           reconciliationStatus: reconciled ? "reconciled" : "incident",
@@ -165,6 +178,15 @@ afterEach(async () => {
       await db
         .delete(codiNotifications)
         .where(inArray(codiNotifications.id, noteIds));
+    }
+    const linkRows = await db
+      .select({ id: paymentLinks.id })
+      .from(paymentLinks)
+      .where(inArray(paymentLinks.chargeId, chargeIds));
+    const linkIds = linkRows.map((row) => row.id);
+    if (linkIds.length > 0) {
+      await db.delete(payments).where(inArray(payments.paymentLinkId, linkIds));
+      await db.delete(paymentLinks).where(inArray(paymentLinks.id, linkIds));
     }
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
@@ -236,6 +258,26 @@ describe("getDailySummary", () => {
     const summary = await getDailySummary({ db, now: () => NOON }, merchant.id);
 
     expect(summary).toEqual({ totalCents: 10001, count: 2 });
+  });
+
+  it("suma el dinero liquidado de un enlace", async () => {
+    const merchant = await newMerchant();
+    await addCharge(merchant.id, {
+      method: "link",
+      amountCents: 10000,
+      receivedCents: 11850,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+    });
+    await addCharge(merchant.id, {
+      method: "link",
+      amountCents: 5000,
+      reconciliationStatus: "incident",
+      paidAt: new Date("2026-11-15T19:00:00.000Z"),
+    });
+
+    const summary = await getDailySummary({ db, now: () => NOON }, merchant.id);
+
+    expect(summary).toEqual({ totalCents: 11850, count: 1 });
   });
 });
 
