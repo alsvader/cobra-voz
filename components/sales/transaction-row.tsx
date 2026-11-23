@@ -26,6 +26,7 @@ export function TransactionRow({
             {formatMxn(movement.amountCents)}
           </span>
           <span className="block truncate text-sm text-muted-foreground">
+            {movement.methodLabel ? `${movement.methodLabel} · ` : null}
             {movement.occurredLabel}
             <span className="sr-only">, referencia </span>
             <span aria-hidden="true"> · </span>

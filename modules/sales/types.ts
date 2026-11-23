@@ -6,6 +6,8 @@ export type MovementDto = {
   reference: string;
   status: ChargeStatus;
   amountCents: number;
+  /** Solo el QR de mostrador lo llena. El resto del historial no lo muestra. */
+  methodLabel?: string | null;
   /** Instante que ordena la fila: `paid_at` si está conciliado, si no la creación. */
   occurredAt: string;
   occurredLabel: string;
@@ -26,6 +28,8 @@ export type MovementDetail = {
   createdLabel: string;
   paidLabel: string | null;
   recordedLabel: string | null;
+  /** «QR de mostrador» en ese código; «CoDi» en el resto. */
+  methodLabel: string;
   explanation: string;
 };
 

@@ -28,6 +28,7 @@ Para quien atiende solo un puesto de comida, una fonda o un tianguis: muchos cob
 - **Esperar al banco.** «Consultar nuevamente» lee el estado guardado. «Cerrar cobro» solo cierra la pantalla: no cancela el pago en el banco.
 - **Decir el pago recibido.** Si la pantalla de cobro está abierta y «Anunciar pagos» está activo, CobraVoz dice una vez «¡Pago recibido!» y el importe. El aviso en pantalla aparece igual.
 - **Ver el día.** El total y el historial suman únicamente pagos conciliados.
+- **QR del mostrador.** Un código fijo, también para imprimir. El cliente lo escanea, escribe el importe en su app y confirma. Cada pago entra como una venta por esa cantidad.
 
 ## Cómo funciona
 
@@ -48,7 +49,7 @@ El recorrido de arriba usa la captura manual de $150.00 en el simulador local. E
 ### Así está el piloto
 
 - En local y en preview responde el simulador, aunque exista una clave de Pey. El QR dice «QR de prueba · no sirve para pagar». El importe **$13.01** deja la creación en estado incierto, en QR, en notificación y en enlace. **$13.02**, al pulsar «Consultar nuevamente», marca pagado ese cobro de prueba. **$13.03** simula que la consulta no responde.
-- En producción, con `PEY_API_KEY`, el QR, la notificación y el enlace bancarios son siempre de **$0.01**. El importe confirmado en la app se guarda y se muestra como la venta. En QR y notificación el banco mueve un centavo y ese centavo concilia el cobro. El total del día suma el dinero recibido.
+- En producción, con `PEY_API_KEY`, el QR de un cobro, la notificación y el enlace bancarios son siempre de **$0.01**. El importe confirmado en la app se guarda y se muestra como la venta. En QR y notificación el banco mueve un centavo y ese centavo concilia el cobro. El total del día suma el dinero recibido. El QR del mostrador es la excepción: Pey lo crea con monto 0 y sin vigencia, y el banco mueve el importe que escribe el cliente.
 - El 2026-11-19 el enlace de $0.01 llegó hasta la app Banamex en iPhone y el banco rechazó el pago al aceptarlo. La notificación directa, en la misma prueba, sí se cobró. El cobro por enlace queda en espera: Pey no manda un aviso de rechazo.
 - La notificación no guarda el celular completo: solo un resumen y los últimos 4 dígitos.
 - Con «Anunciar pagos» activo, un pago que la pantalla de cobro ve llegar se dice una sola vez: «¡Pago recibido!» y el importe en palabras. Hace falta la pestaña abierta. El aviso en pantalla aparece igual si el audio no sale.

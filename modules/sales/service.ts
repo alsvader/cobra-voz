@@ -22,8 +22,7 @@ const RECENT_LIMIT = 5;
 type SalesDeps = { db: Database; now?: () => Date };
 
 export type ListMovementsResult =
-  | ({ ok: true } & MovementPage)
-  | { ok: false; error: "invalid_cursor" };
+  ({ ok: true } & MovementPage) | { ok: false; error: "invalid_cursor" };
 
 function asInt(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -37,9 +36,7 @@ function encodeCursor(occurredAt: Date, id: string): string {
   );
 }
 
-function decodeCursor(
-  raw: string,
-): { occurredAt: Date; id: string } | null {
+function decodeCursor(raw: string): { occurredAt: Date; id: string } | null {
   try {
     const text = Buffer.from(raw, "base64url").toString("utf8");
     const separator = text.lastIndexOf("|");
@@ -79,9 +76,9 @@ async function expireDue(db: Database, merchantId: string, now: Date) {
 
 /**
  * Total y número de pagos conciliados cuyo `paid_at` cae en el día comercial
- * del comercio. Cuenta el QR, la notificación y el enlace: cada pago tiene
- * un solo padre. Suma el dinero recibido, no el importe capturado. Un
- * incidente, un pendiente o un vencido no entra.
+ * del comercio. Cuenta el QR, la notificación, el enlace y el QR de
+ * mostrador. Suma el dinero recibido, no el importe capturado. Un incidente,
+ * un pendiente o un vencido no entra.
  */
 export async function getDailySummary(
   deps: SalesDeps,
@@ -105,7 +102,7 @@ export async function getDailySummary(
     .leftJoin(paymentLinks, eq(paymentLinks.id, payments.paymentLinkId))
     .innerJoin(
       charges,
-      sql`${charges.id} = coalesce(${codiQrs.chargeId}, ${codiNotifications.chargeId}, ${paymentLinks.chargeId})`,
+      sql`${charges.id} = coalesce(${codiQrs.chargeId}, ${codiNotifications.chargeId}, ${paymentLinks.chargeId}, ${payments.chargeId})`,
     )
     .where(
       and(
@@ -149,6 +146,7 @@ export async function listMovements(
       id: charges.id,
       status: charges.status,
       amountCents: charges.amountCents,
+      collectionMethod: charges.collectionMethod,
       createdAt: charges.createdAt,
       paidAt: reconciled.paidAt,
     })
@@ -186,6 +184,8 @@ export async function listMovements(
       reference: chargeReference(row.id),
       status: row.status,
       amountCents: row.amountCents,
+      methodLabel:
+        row.collectionMethod === "counter" ? "QR de mostrador" : null,
       occurredAt: occurredAt.toISOString(),
       occurredLabel: formatOccurred(occurredAt, zone),
     };
@@ -225,12 +225,11 @@ export async function getMovementDetail(
       paidAt: payments.paidAt,
       recordedAt: payments.recordedAt,
       reconciliationStatus: payments.reconciliationStatus,
+      collectionMethod: charges.collectionMethod,
     })
     .from(charges)
     .leftJoin(payments, eq(payments.id, charges.paidPaymentId))
-    .where(
-      and(eq(charges.id, chargeId), eq(charges.merchantId, merchantId)),
-    )
+    .where(and(eq(charges.id, chargeId), eq(charges.merchantId, merchantId)))
     .limit(1);
 
   const reconciled = payment?.reconciliationStatus === "reconciled";
@@ -249,6 +248,8 @@ export async function getMovementDetail(
       reconciled && payment?.recordedAt
         ? formatOccurred(payment.recordedAt, zone)
         : null,
+    methodLabel:
+      payment?.collectionMethod === "counter" ? "QR de mostrador" : "CoDi",
     explanation: movementExplanation(settled.charge.status),
   };
 }

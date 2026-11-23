@@ -5,6 +5,8 @@ import type { PeyAdapter } from "./types";
 export { REAL_QR_AMOUNT_CENTS } from "./contract";
 
 export type {
+  CreateCounterQrOutcome,
+  CreateCounterQrRequest,
   CreatePaymentLinkOutcome,
   CreatePaymentLinkRequest,
   CreatePushOutcome,

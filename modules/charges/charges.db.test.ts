@@ -49,6 +49,12 @@ function adapterReturning(
   const calls: unknown[] = [];
   const adapter: PeyAdapter = {
     kind: "mock",
+    async createCounterQr() {
+      return {
+        status: "uncertain",
+        reason: "Esta prueba no crea el QR de mostrador.",
+      };
+    },
     async createCodiQr(request) {
       calls.push(request);
       return produce();
@@ -1180,6 +1186,12 @@ describe("createCharge — enlace", () => {
     let calls = 0;
     const adapter: PeyAdapter = {
       kind: "mock",
+      async createCounterQr() {
+        return {
+          status: "uncertain",
+          reason: "Esta prueba no crea el QR de mostrador.",
+        };
+      },
       async createCodiQr() {
         throw new Error("esta prueba no crea QR");
       },

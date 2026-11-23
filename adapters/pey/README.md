@@ -64,6 +64,14 @@ capturado sigue en `charges.amount_cents`, el movimiento lo muestra, y el
 total del día suma el centavo recibido, tanto si el pago vino de un QR como
 de una notificación.
 
+## QR de mostrador
+
+Excepción al centavo. `createCounterQr` usa el mismo `POST /codi/qr`, con
+`amount` 0, `expiration` 0, concepto `Transferencia` y `numRef` `0`. El
+cliente escribe el importe en su app. El código se crea una vez por comercio
+y no se vuelve a pedir si la llamada queda incierta. Cada
+`codi.qr.payment_received` de ese id abre una venta por el monto del aviso.
+
 ## Notificación (`POST /codi/pn`)
 
 Misma clave, mismo monto de **$0.01** y la misma regla de una sola llamada.

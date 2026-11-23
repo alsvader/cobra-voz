@@ -4,6 +4,7 @@ import {
   charges,
   codiNotifications,
   codiQrs,
+  counterQrs,
   merchants,
   paymentEvents,
   paymentIncidents,
@@ -11,6 +12,7 @@ import {
   payments,
 } from "@/adapters/db/schema";
 import { REAL_QR_AMOUNT_CENTS } from "@/adapters/pey/contract";
+import { isValidAmountCents } from "@/modules/charges/amount";
 import type { PeyPaymentNotice } from "./schema";
 
 const PROVIDER = "pey";
@@ -137,6 +139,18 @@ export async function recordPeyPayment(
 
     const instrument = await findInstrument(tx, notice);
     if (!instrument) {
+      if (notice.kind === "qr") {
+        const counter = await findReadyCounter(tx, notice.codiQrId);
+        if (counter) {
+          return settleCounterQr(tx, {
+            eventId,
+            now,
+            notice,
+            counter,
+            evidenceSource,
+          });
+        }
+      }
       await finishIncident(tx, {
         eventId,
         now,
@@ -265,6 +279,165 @@ export async function recordPeyPayment(
   });
 }
 
+type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+type CounterRow = {
+  id: string;
+  merchantId: string;
+  numRef: number;
+  bankAccountId: string;
+};
+
+async function findReadyCounter(
+  tx: Tx,
+  peyQrId: string,
+): Promise<CounterRow | null> {
+  const [row] = await tx
+    .select({
+      id: counterQrs.id,
+      merchantId: counterQrs.merchantId,
+      numRef: counterQrs.numRef,
+      bankAccountId: merchants.peyBankAccountId,
+    })
+    .from(counterQrs)
+    .innerJoin(merchants, eq(merchants.id, counterQrs.merchantId))
+    .where(and(eq(counterQrs.peyQrId, peyQrId), eq(counterQrs.status, "ready")))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Cada aviso del QR fijo abre una venta ya pagada por el importe que escribió
+ * el cliente. Otro aviso del mismo código es otra venta. Un aviso que no
+ * coincide en referencia o cuenta no crea venta.
+ */
+async function settleCounterQr(
+  tx: Tx,
+  input: {
+    eventId: string;
+    now: Date;
+    notice: Extract<PeyPaymentNotice, { kind: "qr" }>;
+    counter: CounterRow;
+    evidenceSource: "webhook" | "provider_query";
+  },
+): Promise<RecordPaymentResult> {
+  const { eventId, now, notice, counter, evidenceSource } = input;
+  const mismatches: Mismatch[] = [];
+  if (!isValidAmountCents(notice.amountCents))
+    mismatches.push("amount_mismatch");
+  if (notice.numRef !== counter.numRef) mismatches.push("reference_mismatch");
+  if (notice.bankAccountId !== counter.bankAccountId) {
+    mismatches.push("account_mismatch");
+  }
+  if (mismatches.length > 0) {
+    await finishIncident(tx, {
+      eventId,
+      now,
+      type: mismatches.length === 1 ? mismatches[0] : "other",
+      reason: mismatches.map((item) => MISMATCH_LABEL[item]).join(" "),
+    });
+    return { outcome: "incident", duplicate: false };
+  }
+
+  const [existingPayment] = await tx
+    .select({ status: payments.reconciliationStatus })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.provider, PROVIDER),
+        eq(payments.providerTransactionId, notice.transactionId),
+      ),
+    )
+    .limit(1);
+  if (existingPayment) {
+    await tx
+      .update(paymentEvents)
+      .set({
+        processingStatus: "ignored",
+        processedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(paymentEvents.id, eventId));
+    return {
+      outcome: existingPayment.status === "reconciled" ? "paid" : "incident",
+      duplicate: true,
+    };
+  }
+
+  const idempotencyKey = `counter:${notice.transactionId}`;
+  const [charge] = await tx
+    .insert(charges)
+    .values({
+      merchantId: counter.merchantId,
+      amountCents: notice.amountCents,
+      status: "created",
+      idempotencyKey,
+      collectionMethod: "counter",
+    })
+    .onConflictDoNothing({
+      target: [charges.merchantId, charges.idempotencyKey],
+    })
+    .returning({ id: charges.id });
+
+  if (!charge) {
+    const [prior] = await tx
+      .select({ status: charges.status })
+      .from(charges)
+      .where(
+        and(
+          eq(charges.merchantId, counter.merchantId),
+          eq(charges.idempotencyKey, idempotencyKey),
+        ),
+      )
+      .limit(1);
+    await tx
+      .update(paymentEvents)
+      .set({
+        processingStatus: "ignored",
+        processedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(paymentEvents.id, eventId));
+    return {
+      outcome: prior?.status === "paid" ? "paid" : "incident",
+      duplicate: true,
+    };
+  }
+
+  const [payment] = await tx
+    .insert(payments)
+    .values({
+      counterQrId: counter.id,
+      chargeId: charge.id,
+      provider: PROVIDER,
+      providerTransactionId: notice.transactionId,
+      amountCents: notice.amountCents,
+      reconciliationStatus: "reconciled",
+      evidenceSource,
+      paidAt: notice.paidAt,
+      recordedAt: now,
+      reconciledAt: now,
+    })
+    .returning({ id: payments.id });
+
+  await tx
+    .update(charges)
+    .set({ status: "paid", paidPaymentId: payment.id, updatedAt: now })
+    .where(eq(charges.id, charge.id));
+
+  await tx
+    .update(paymentEvents)
+    .set({
+      processingStatus: "applied",
+      paymentId: payment.id,
+      processedAt: now,
+      updatedAt: now,
+    })
+    .where(eq(paymentEvents.id, eventId));
+
+  return { outcome: "paid", duplicate: false };
+}
+
 type Instrument = {
   kind: "qr" | "pn" | "link";
   id: string;
@@ -373,7 +546,12 @@ async function finishIncident(
   input: {
     eventId: string;
     now: Date;
-    type: "unknown_qr" | "other";
+    type:
+      | "unknown_qr"
+      | "other"
+      | "amount_mismatch"
+      | "reference_mismatch"
+      | "account_mismatch";
     reason: string;
   },
 ) {

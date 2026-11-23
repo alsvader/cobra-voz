@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 import type {
+  CreateCounterQrRequest,
   CreatePaymentLinkOutcome,
   CreatePaymentLinkRequest,
   CreatePushOutcome,
@@ -49,6 +50,8 @@ export function isSimulatedQr(qrPayload: string): boolean {
 export type MockPeyAdapter = PeyAdapter & {
   /** Veces que se pidió crear un QR (las pruebas verifican que no se repite). */
   readonly calls: readonly CreateQrRequest[];
+  /** Veces que se pidió el QR fijo del mostrador. */
+  readonly counterCalls: readonly CreateCounterQrRequest[];
   /** Veces que se pidió enviar una notificación. */
   readonly pushCalls: readonly CreatePushRequest[];
   /** Veces que se pidió crear un enlace. */
@@ -64,6 +67,7 @@ export function createMockPeyAdapter(
 ): MockPeyAdapter {
   const now = options.now ?? (() => new Date());
   const calls: CreateQrRequest[] = [];
+  const counterCalls: CreateCounterQrRequest[] = [];
   const pushCalls: CreatePushRequest[] = [];
   const linkCalls: CreatePaymentLinkRequest[] = [];
   const queryCalls: string[] = [];
@@ -75,6 +79,7 @@ export function createMockPeyAdapter(
   return {
     kind: "mock",
     calls,
+    counterCalls,
     pushCalls,
     linkCalls,
     queryCalls,
@@ -137,6 +142,14 @@ export function createMockPeyAdapter(
         };
       }
       return { status: "ok", payments: [] };
+    },
+    async createCounterQr(request) {
+      counterCalls.push(request);
+      return {
+        status: "created" as const,
+        peyQrId: `mock-counter-${randomUUID()}`,
+        qrString: `${MOCK_QR_PREFIX}counter|${request.merchantId}|${request.numRef}`,
+      };
     },
     async createCodiPush(request): Promise<CreatePushOutcome> {
       pushCalls.push(request);

@@ -68,7 +68,11 @@ async function DetailContent({
   return (
     <AppShell
       header={
-        <PageHeader title="Detalle" backHref={back.href} backLabel={back.label} />
+        <PageHeader
+          title="Detalle"
+          backHref={back.href}
+          backLabel={back.label}
+        />
       }
     >
       {detail ? (
@@ -105,11 +109,15 @@ function DetailBody({ detail }: { detail: MovementDetail }) {
   if (detail.recordedLabel) {
     rows.push(["Fecha de registro", detail.recordedLabel]);
   }
-  rows.push(["Referencia", detail.reference], ["Método", "CoDi"]);
+  rows.push(["Referencia", detail.reference], ["Método", detail.methodLabel]);
 
   return (
     <div className="flex flex-col gap-5 py-4">
-      <StatusBadge tone={status.tone} label={status.label} className="self-start" />
+      <StatusBadge
+        tone={status.tone}
+        label={status.label}
+        className="self-start"
+      />
       <p className="text-base text-foreground">{detail.explanation}</p>
       <dl className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
         {rows.map(([label, value]) => (

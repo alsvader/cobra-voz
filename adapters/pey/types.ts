@@ -37,6 +37,23 @@ export type CreateQrOutcome =
   | { status: "uncertain"; reason: string };
 
 /**
+ * QR fijo del mostrador. El mismo `POST /codi/qr`, con monto 0 y sin
+ * vigencia: quien paga escribe el importe en su app. No pertenece a un cobro.
+ */
+export type CreateCounterQrRequest = {
+  /** UUID del comercio. Viaja en `metadata` y no es un id de cobro. */
+  merchantId: string;
+  concept: string;
+  /** Referencia numérica de Pey, 0..9 999 999. */
+  numRef: number;
+  bankAccountId: string;
+};
+
+export type CreateCounterQrOutcome =
+  | { status: "created"; peyQrId: string; qrString: string }
+  | { status: "uncertain"; reason: string };
+
+/**
  * Pago que Pey reporta al consultar un QR que CobraVoz YA conoce.
  * El adaptador solo devuelve pagos de ESE `peyQrId`: el servicio no acepta
  * un identificador distinto ni inventa uno que Pey nunca entregó.
@@ -134,6 +151,13 @@ export interface PeyAdapter {
   readonly kind: "mock" | "real";
   /** Una única llamada a `POST /codi/qr`. Sin reintentos internos. */
   createCodiQr(request: CreateQrRequest): Promise<CreateQrOutcome>;
+  /**
+   * QR de mostrador: `POST /codi/qr` con monto 0 y vigencia 0. Una sola
+   * llamada. Un fallo queda incierto y no se pide otro código.
+   */
+  createCounterQr(
+    request: CreateCounterQrRequest,
+  ): Promise<CreateCounterQrOutcome>;
   /**
    * `GET /transaction/codi/qr/:id` (Architecture §9). Solo con un id que Pey
    * ya devolvió. Sin id no hay nada que consultar.

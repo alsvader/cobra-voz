@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
-import { Keyboard, Settings } from "lucide-react";
+import { Keyboard, QrCode, Settings } from "lucide-react";
 import { getDb } from "@/adapters/db/client";
 import { AppShell } from "@/components/ui/app-shell";
 import { buttonVariants } from "@/components/ui/button";
@@ -74,6 +74,13 @@ async function HomeContent() {
         >
           <Keyboard aria-hidden="true" />
           Ingresar importe manualmente
+        </Link>
+        <Link
+          href={ROUTES.counter}
+          className={buttonVariants({ variant: "outline", size: "md" })}
+        >
+          <QrCode aria-hidden="true" />
+          QR del mostrador
         </Link>
 
         {pending ? <PendingChargeNotice charge={pending} /> : null}
