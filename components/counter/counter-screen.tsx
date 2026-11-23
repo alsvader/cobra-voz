@@ -5,6 +5,10 @@ import {
   announceVerifiedPayment,
   primePaymentSpeech,
 } from "@/adapters/speech/announce";
+import {
+  CounterPaymentToaster,
+  showCounterPaymentToast,
+} from "@/components/counter/payment-toast";
 import { CounterPaySteps } from "@/components/counter/pay-steps";
 import { CoDiQrCard } from "@/components/charge/codi-qr-card";
 import { Button } from "@/components/ui/button";
@@ -55,7 +59,10 @@ export function CounterScreen({
     if (fresh.length === 0) return;
     for (const payment of fresh) seen.current.add(payment.id);
     setPayments(next);
-    for (const payment of fresh) void announceVerifiedPayment(payment);
+    for (const payment of fresh) {
+      showCounterPaymentToast(payment);
+      void announceVerifiedPayment(payment);
+    }
   }, []);
 
   useEffect(() => {
@@ -101,6 +108,7 @@ export function CounterScreen({
 
   return (
     <div className="flex flex-col items-center gap-6 py-4">
+      <CounterPaymentToaster />
       <p className="text-center text-xl font-bold text-foreground">
         {merchantName}
       </p>

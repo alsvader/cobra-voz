@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import toast from "react-hot-toast";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   announceVerifiedPayment,
   primePaymentSpeech,
@@ -26,7 +27,19 @@ function screenOf(allowTestPayment: boolean) {
   );
 }
 
+beforeEach(() => {
+  // react-hot-toast llama a matchMedia al montar el Toaster.
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    dispatchEvent: () => false,
+  }));
+});
+
 afterEach(() => {
+  toast.removeAll();
   vi.unstubAllGlobals();
 });
 
@@ -61,7 +74,35 @@ describe("CounterScreen", () => {
     );
 
     expect(primePaymentSpeech).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("$10.00")).toBeInTheDocument();
+    expect(await screen.findByText("Pagado")).toBeInTheDocument();
+    expect(screen.getByText("QR de mostrador")).toBeInTheDocument();
+    expect(screen.getAllByText("$10.00")).toHaveLength(2);
     expect(announceVerifiedPayment).toHaveBeenCalledWith(sale);
+
+    await user.click(screen.getByRole("button", { name: "Cerrar aviso" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Pagado")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("$10.00")).toBeInTheDocument();
+  });
+
+  it("no avisa los pagos que ya estaban al abrir", () => {
+    render(
+      <CounterScreen
+        merchantName="Minino Coffee"
+        payload={payload}
+        simulated
+        initialPayments={[
+          {
+            id: "00000000-0000-4000-8000-000000000011",
+            amountCents: 2500,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("$25.00")).toBeInTheDocument();
+    expect(screen.queryByText("Pagado")).not.toBeInTheDocument();
+    expect(announceVerifiedPayment).not.toHaveBeenCalled();
   });
 });
