@@ -59,6 +59,38 @@ describe("cliente Pey real", () => {
     expect(REAL_QR_AMOUNT_CENTS).toBe(1);
   });
 
+  it("el QR de mostrador pide monto 0, sin vigencia, y no reintenta", async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const pey = createRealPeyAdapter({
+      apiKey: "pey-live-key",
+      now: () => now,
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), init: init ?? {} });
+        return jsonResponse({ message: "no" }, 500);
+      },
+    });
+
+    const outcome = await pey.createCounterQr({
+      merchantId: "5f0d9f0e-8c3a-4e0e-9d7e-0c1f7c8c2a11",
+      concept: "Transferencia",
+      numRef: 0,
+      bankAccountId: "acct-1",
+    });
+
+    expect(outcome.status).toBe("uncertain");
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0].init.body));
+    expect(body).toEqual({
+      amount: 0,
+      concept: "Transferencia",
+      expiration: 0,
+      numRef: "0",
+      generateImage: false,
+      bankAccountId: "acct-1",
+      metadata: { merchantId: "5f0d9f0e-8c3a-4e0e-9d7e-0c1f7c8c2a11" },
+    });
+  });
+
   it("guarda el id y el qrString de una respuesta 201", async () => {
     const pey = createRealPeyAdapter({
       apiKey: "pey-live-key",
@@ -473,7 +505,10 @@ describe("cliente Pey real", () => {
       successUrl: "https://cobravoz.example/enlace/pago-completado",
       backUrl: "https://cobravoz.example/enlace/pago-cancelado",
     });
-    expect(outcome).toEqual({ status: "rejected", errorType: "INVALID_AMOUNT" });
+    expect(outcome).toEqual({
+      status: "rejected",
+      errorType: "INVALID_AMOUNT",
+    });
     expect(JSON.stringify(outcome)).not.toContain("secreto");
   });
 

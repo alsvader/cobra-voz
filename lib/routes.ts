@@ -9,6 +9,8 @@ export const ROUTES = {
   confirmAmount: "/cobro/confirmar",
   /** P04 Ventas y A03 Detalle (`/ventas/[id]`). */
   sales: "/ventas",
+  /** QR fijo del mostrador. El cliente escribe el importe. */
+  counter: "/mostrador",
   /** El cliente llega aquí después de pagar un enlace. No marca el cobro. */
   paymentLinkPaid: "/enlace/pago-completado",
   /** El cliente llega aquí si cancela o regresa del enlace. */
@@ -39,6 +41,7 @@ export const PRIVATE_PATH_PREFIXES: readonly string[] = [
   ROUTES.settings,
   ROUTES.charge,
   ROUTES.sales,
+  ROUTES.counter,
 ];
 
 export function isPrivatePath(pathname: string): boolean {

@@ -43,6 +43,13 @@
       "when": 1795065337637,
       "tag": "0005_payment_link",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795409505836,
+      "tag": "0006_counter_qr",
+      "breakpoints": true
     }
   ]
 }

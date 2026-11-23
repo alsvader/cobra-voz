@@ -20,6 +20,8 @@ describe("isPrivatePath", () => {
       true,
     );
     expect(isPrivatePath("/ventas-falsas")).toBe(false);
+    expect(isPrivatePath("/mostrador")).toBe(true);
+    expect(isPrivatePath("/mostrador-falso")).toBe(false);
   });
 
   it("deja públicas la landing y el acceso", () => {

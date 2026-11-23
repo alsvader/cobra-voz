@@ -37,6 +37,21 @@ describe("adaptador Pey simulado", () => {
     expect(outcome.expiresAt).toEqual(new Date("2026-11-15T12:10:00Z"));
   });
 
+  it("el QR de mostrador también se rotula como prueba", async () => {
+    const mock = createMockPeyAdapter();
+    const outcome = await mock.createCounterQr({
+      merchantId: request.chargeId,
+      concept: "Transferencia",
+      numRef: 0,
+      bankAccountId: request.bankAccountId,
+    });
+
+    expect(outcome.status).toBe("created");
+    if (outcome.status !== "created") return;
+    expect(isSimulatedQr(outcome.qrString)).toBe(true);
+    expect(mock.counterCalls).toHaveLength(1);
+  });
+
   it("el importe mágico produce un resultado incierto (sin QR)", async () => {
     const mock = createMockPeyAdapter();
 

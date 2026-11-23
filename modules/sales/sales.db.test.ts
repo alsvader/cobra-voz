@@ -5,6 +5,7 @@ import {
   charges,
   codiNotifications,
   codiQrs,
+  counterQrs,
   merchants,
   paymentLinks,
   payments,
@@ -40,8 +41,8 @@ async function addCharge(
     reconciliationStatus?: "reconciled" | "incident";
     /** Importe del pago. Si no viene, es el mismo que el cobro. */
     receivedCents?: number;
-    /** `pn` guarda el pago en la notificación. `link`, en el enlace. */
-    method?: "qr" | "pn" | "link";
+    /** `pn` guarda el pago en la notificación. `link`, en el enlace. `counter`, en el QR fijo. */
+    method?: "qr" | "pn" | "link" | "counter";
   } = {},
 ) {
   const amountCents = options.amountCents ?? 15050;
@@ -69,42 +70,68 @@ async function addCharge(
     .returning();
 
   if (options.paidAt || options.status === "incident") {
-    const instrument =
-      method === "pn"
+    const counter =
+      method === "counter"
         ? await db
-            .insert(codiNotifications)
+            .insert(counterQrs)
             .values({
-              chargeId: charge.id,
-              peyTransactionId: `pn-${randomUUID()}`,
-              codiId: randomUUID().replaceAll("-", "").slice(0, 20),
-              numRef: 123456,
-              phoneLast4: "5678",
-              expiresAt: new Date(createdAt.getTime() + 600_000),
+              merchantId,
+              status: "ready",
+              peyQrId: `counter-${randomUUID()}`,
+              numRef: 0,
+              qrPayload: `COBRAVOZ-MOCK|counter|${merchantId}|${charge.id}`,
+              concept: "Transferencia",
             })
+            .onConflictDoNothing({ target: counterQrs.merchantId })
             .returning()
-            .then((rows) => rows[0])
-        : method === "link"
+            .then(async (rows) => {
+              if (rows[0]) return rows[0];
+              const [existing] = await db
+                .select()
+                .from(counterQrs)
+                .where(eq(counterQrs.merchantId, merchantId));
+              return existing;
+            })
+        : null;
+    const instrument =
+      method === "counter"
+        ? counter
+        : method === "pn"
           ? await db
-              .insert(paymentLinks)
+              .insert(codiNotifications)
               .values({
                 chargeId: charge.id,
-                peyPaymentLinkId: `link-${randomUUID()}`,
-                url: `https://app.mipey.mx/payment-link/${charge.id}`,
+                peyTransactionId: `pn-${randomUUID()}`,
+                codiId: randomUUID().replaceAll("-", "").slice(0, 20),
+                numRef: 123456,
+                phoneLast4: "5678",
                 expiresAt: new Date(createdAt.getTime() + 600_000),
               })
               .returning()
               .then((rows) => rows[0])
-          : await db
-              .insert(codiQrs)
-              .values({
-                chargeId: charge.id,
-                peyQrId: `qr-${randomUUID()}`,
-                numRef: 123456,
-                qrPayload: `COBRAVOZ-MOCK|${charge.id}`,
-                expiresAt: new Date(createdAt.getTime() + 600_000),
-              })
-              .returning()
-              .then((rows) => rows[0]);
+          : method === "link"
+            ? await db
+                .insert(paymentLinks)
+                .values({
+                  chargeId: charge.id,
+                  peyPaymentLinkId: `link-${randomUUID()}`,
+                  url: `https://app.mipey.mx/payment-link/${charge.id}`,
+                  expiresAt: new Date(createdAt.getTime() + 600_000),
+                })
+                .returning()
+                .then((rows) => rows[0])
+            : await db
+                .insert(codiQrs)
+                .values({
+                  chargeId: charge.id,
+                  peyQrId: `qr-${randomUUID()}`,
+                  numRef: 123456,
+                  qrPayload: `COBRAVOZ-MOCK|${charge.id}`,
+                  expiresAt: new Date(createdAt.getTime() + 600_000),
+                })
+                .returning()
+                .then((rows) => rows[0]);
+    if (!instrument) throw new Error("setup");
     if (options.paidAt || options.reconciliationStatus) {
       const reconciled =
         (options.reconciliationStatus ?? "reconciled") === "reconciled";
@@ -114,6 +141,8 @@ async function addCharge(
           codiQrId: method === "qr" ? instrument.id : null,
           codiNotificationId: method === "pn" ? instrument.id : null,
           paymentLinkId: method === "link" ? instrument.id : null,
+          counterQrId: method === "counter" ? instrument.id : null,
+          chargeId: method === "counter" ? charge.id : null,
           providerTransactionId: `tx-${randomUUID()}`,
           amountCents: options.receivedCents ?? amountCents,
           reconciliationStatus: reconciled ? "reconciled" : "incident",
@@ -188,8 +217,12 @@ afterEach(async () => {
       await db.delete(payments).where(inArray(payments.paymentLinkId, linkIds));
       await db.delete(paymentLinks).where(inArray(paymentLinks.id, linkIds));
     }
+    await db.delete(payments).where(inArray(payments.chargeId, chargeIds));
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
+  await db
+    .delete(counterQrs)
+    .where(inArray(counterQrs.merchantId, merchantIds));
   await db.delete(merchants).where(inArray(merchants.id, merchantIds));
   merchantIds.length = 0;
 });
@@ -278,6 +311,31 @@ describe("getDailySummary", () => {
     const summary = await getDailySummary({ db, now: () => NOON }, merchant.id);
 
     expect(summary).toEqual({ totalCents: 11850, count: 1 });
+  });
+
+  it("suma el importe que el cliente escribió en el QR de mostrador", async () => {
+    const merchant = await newMerchant();
+    await addCharge(merchant.id, {
+      method: "counter",
+      amountCents: 25000,
+      receivedCents: 25000,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+    });
+    await addCharge(merchant.id, {
+      method: "counter",
+      amountCents: 4000,
+      receivedCents: 4000,
+      paidAt: new Date("2026-11-15T18:10:00.000Z"),
+    });
+
+    const summary = await getDailySummary({ db, now: () => NOON }, merchant.id);
+    const page = await listMovements({ db, now: () => NOON }, merchant.id);
+
+    expect(summary).toEqual({ totalCents: 29000, count: 2 });
+    expect(
+      page.ok &&
+        page.movements.every((row) => row.methodLabel === "QR de mostrador"),
+    ).toBe(true);
   });
 });
 

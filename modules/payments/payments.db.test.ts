@@ -5,6 +5,7 @@ import {
   charges,
   codiNotifications,
   codiQrs,
+  counterQrs,
   merchants,
   paymentEvents,
   paymentIncidents,
@@ -138,8 +139,12 @@ afterEach(async () => {
       await db.delete(payments).where(inArray(payments.paymentLinkId, linkIds));
       await db.delete(paymentLinks).where(inArray(paymentLinks.id, linkIds));
     }
+    await db.delete(payments).where(inArray(payments.chargeId, chargeIds));
     await db.delete(charges).where(inArray(charges.id, chargeIds));
   }
+  await db
+    .delete(counterQrs)
+    .where(inArray(counterQrs.merchantId, merchantIds));
   await db.delete(merchants).where(inArray(merchants.id, merchantIds));
   merchantIds.length = 0;
 });
@@ -320,6 +325,92 @@ describe("recordPeyPayment", () => {
       .from(paymentIncidents)
       .where(eq(paymentIncidents.chargeId, charge.id));
     expect(incidents[0].type).toBe("account_mismatch");
+  });
+
+  it("dos pagos del QR de mostrador crean dos ventas por el importe escrito", async () => {
+    const merchant = await newMerchant();
+    const [counter] = await db
+      .insert(counterQrs)
+      .values({
+        merchantId: merchant.id,
+        status: "ready",
+        peyQrId: `counter-${randomUUID()}`,
+        numRef: 0,
+        qrPayload: `COBRAVOZ-MOCK|counter|${merchant.id}`,
+        concept: "Transferencia",
+      })
+      .returning();
+
+    const first = await recordPeyPayment({ db }, webhook(), {
+      kind: "qr",
+      chargeId: null,
+      transactionId: `tx-${randomUUID()}`,
+      codiQrId: counter.peyQrId!,
+      amountCents: 15000,
+      numRef: 0,
+      bankAccountId: merchant.peyBankAccountId,
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+    });
+    const second = await recordPeyPayment({ db }, webhook(), {
+      kind: "qr",
+      chargeId: null,
+      transactionId: `tx-${randomUUID()}`,
+      codiQrId: counter.peyQrId!,
+      amountCents: 8050,
+      numRef: 0,
+      bankAccountId: merchant.peyBankAccountId,
+      paidAt: new Date("2026-11-15T18:05:00.000Z"),
+    });
+
+    expect(first).toEqual({ outcome: "paid", duplicate: false });
+    expect(second).toEqual({ outcome: "paid", duplicate: false });
+    const rows = await db
+      .select({
+        amountCents: charges.amountCents,
+        method: charges.collectionMethod,
+      })
+      .from(charges)
+      .where(eq(charges.merchantId, merchant.id));
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { amountCents: 15000, method: "counter" },
+        { amountCents: 8050, method: "counter" },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it("un aviso del mostrador con otra cuenta no crea una venta", async () => {
+    const merchant = await newMerchant();
+    const [counter] = await db
+      .insert(counterQrs)
+      .values({
+        merchantId: merchant.id,
+        status: "ready",
+        peyQrId: `counter-${randomUUID()}`,
+        numRef: 0,
+        qrPayload: `COBRAVOZ-MOCK|counter|${merchant.id}`,
+        concept: "Transferencia",
+      })
+      .returning();
+
+    const result = await recordPeyPayment({ db }, webhook(), {
+      kind: "qr",
+      chargeId: null,
+      transactionId: `tx-${randomUUID()}`,
+      codiQrId: counter.peyQrId!,
+      amountCents: 15000,
+      numRef: 0,
+      bankAccountId: "otra-cuenta",
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+    });
+
+    expect(result).toEqual({ outcome: "incident", duplicate: false });
+    const rows = await db
+      .select({ id: charges.id })
+      .from(charges)
+      .where(eq(charges.merchantId, merchant.id));
+    expect(rows).toHaveLength(0);
   });
 
   it("un QR desconocido no crea cobro ni pago", async () => {

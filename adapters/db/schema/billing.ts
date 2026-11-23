@@ -53,7 +53,10 @@ export const charges = pgTable(
      * en cada pasada del cron.
      */
     lastReconciliationAt: timestamptz("last_reconciliation_at"),
-    /** `qr` muestra un código. `pn` envía el aviso. `link` crea un enlace. */
+    /**
+     * `qr` muestra un código de un cobro. `pn` envía el aviso. `link` crea
+     * un enlace. `counter` es un pago del QR fijo del mostrador.
+     */
     collectionMethod: text("collection_method").notNull().default("qr"),
     /**
      * `uncertain`: no se sabe si Pey creó el instrumento.
@@ -91,12 +94,12 @@ export const charges = pgTable(
     ),
     check(
       "charges_collection_method",
-      sql`${table.collectionMethod} in ('qr', 'pn', 'link')`,
+      sql`${table.collectionMethod} in ('qr', 'pn', 'link', 'counter')`,
     ),
     check(
       "charges_phone_matches_method",
       sql`(
-        ${table.collectionMethod} in ('qr', 'link')
+        ${table.collectionMethod} in ('qr', 'link', 'counter')
         AND ${table.phoneHash} IS NULL
         AND ${table.phoneLast4} IS NULL
       ) OR (
@@ -211,8 +214,55 @@ export const paymentLinks = pgTable(
 ).enableRLS();
 
 /**
- * Movimiento bancario externo. Apunta a un QR, a una notificación o a un
- * enlace, nunca a más de uno. `paid_at` es el instante real del pago;
+ * QR CoDi fijo del mostrador. Uno por comercio. `ready` guarda el `qrString`
+ * que devolvió Pey. `pending` y `uncertain` no tienen código: no se vuelve a
+ * pedir otro, porque un timeout puede haberlo creado.
+ */
+export const counterQrs = pgTable(
+  "counter_qrs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .unique("counter_qrs_merchant_id_key")
+      .references(() => merchants.id, { onDelete: "restrict" }),
+    /** `pending` mientras se llama a Pey. `ready` o `uncertain` después. */
+    status: text("status").notNull(),
+    peyQrId: text("pey_qr_id").unique("counter_qrs_pey_qr_id_key"),
+    numRef: integer("num_ref").notNull(),
+    /** `qrString` real. Vacío hasta que Pey confirma el código. */
+    qrPayload: text("qr_payload"),
+    concept: text("concept").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    check(
+      "counter_qrs_status",
+      sql`${table.status} in ('pending', 'ready', 'uncertain')`,
+    ),
+    check(
+      "counter_qrs_num_ref_max_7_digits",
+      sql`${table.numRef} BETWEEN 0 AND 9999999`,
+    ),
+    check(
+      "counter_qrs_ready_has_payload",
+      sql`(
+        ${table.status} = 'ready'
+        AND ${table.peyQrId} IS NOT NULL
+        AND ${table.qrPayload} IS NOT NULL
+      ) OR (
+        ${table.status} in ('pending', 'uncertain')
+        AND ${table.peyQrId} IS NULL
+        AND ${table.qrPayload} IS NULL
+      )`,
+    ),
+  ],
+).enableRLS();
+
+/**
+ * Movimiento bancario externo. Apunta a un QR, a una notificación, a un
+ * enlace o al QR de mostrador, nunca a más de uno. `paid_at` es el instante
+ * real del pago;
  * `recorded_at` es cuándo lo persistió CobraVoz: los totales usan `paid_at`.
  */
 export const payments = pgTable(
@@ -230,6 +280,17 @@ export const payments = pgTable(
       (): AnyPgColumn => paymentLinks.id,
       { onDelete: "restrict" },
     ),
+    /** QR fijo del mostrador. Varios pagos pueden apuntar al mismo código. */
+    counterQrId: uuid("counter_qr_id").references(() => counterQrs.id, {
+      onDelete: "restrict",
+    }),
+    /**
+     * Cobro creado por un pago del mostrador. Los demás instrumentos llegan
+     * al cobro por su propia tabla, así que aquí queda vacío.
+     */
+    chargeId: uuid("charge_id").references((): AnyPgColumn => charges.id, {
+      onDelete: "restrict",
+    }),
     provider: text("provider").notNull().default("pey"),
     providerTransactionId: text("provider_transaction_id").notNull(),
     /** Importe REALMENTE recibido (puede diferir del solicitado → incidencia). */
@@ -251,6 +312,8 @@ export const payments = pgTable(
     index("payments_codi_qr_id_idx").on(table.codiQrId),
     index("payments_codi_notification_id_idx").on(table.codiNotificationId),
     index("payments_payment_link_id_idx").on(table.paymentLinkId),
+    index("payments_counter_qr_id_idx").on(table.counterQrId),
+    index("payments_charge_id_idx").on(table.chargeId),
     index("payments_paid_at_idx").on(table.paidAt),
     index("payments_reconciliation_status_idx").on(table.reconciliationStatus),
     check("payments_amount_cents_positive", sql`${table.amountCents} > 0`),
@@ -264,14 +327,26 @@ export const payments = pgTable(
         ${table.codiQrId} IS NOT NULL
         AND ${table.codiNotificationId} IS NULL
         AND ${table.paymentLinkId} IS NULL
+        AND ${table.counterQrId} IS NULL
+        AND ${table.chargeId} IS NULL
       ) OR (
         ${table.codiQrId} IS NULL
         AND ${table.codiNotificationId} IS NOT NULL
         AND ${table.paymentLinkId} IS NULL
+        AND ${table.counterQrId} IS NULL
+        AND ${table.chargeId} IS NULL
       ) OR (
         ${table.codiQrId} IS NULL
         AND ${table.codiNotificationId} IS NULL
         AND ${table.paymentLinkId} IS NOT NULL
+        AND ${table.counterQrId} IS NULL
+        AND ${table.chargeId} IS NULL
+      ) OR (
+        ${table.codiQrId} IS NULL
+        AND ${table.codiNotificationId} IS NULL
+        AND ${table.paymentLinkId} IS NULL
+        AND ${table.counterQrId} IS NOT NULL
+        AND ${table.chargeId} IS NOT NULL
       )`,
     ),
   ],

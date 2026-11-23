@@ -5,6 +5,8 @@ import {
   centsToPeyAmountToken,
 } from "./contract";
 import type {
+  CreateCounterQrOutcome,
+  CreateCounterQrRequest,
   CreatePaymentLinkOutcome,
   CreatePaymentLinkRequest,
   CreatePushOutcome,
@@ -111,6 +113,45 @@ export function createRealPeyAdapter(options: RealPeyOptions): PeyAdapter {
         return {
           status: "uncertain",
           reason: "La respuesta de Pey no trae un QR utilizable.",
+        };
+      }
+      return created;
+    },
+
+    async createCounterQr(input): Promise<CreateCounterQrOutcome> {
+      const body = buildCounterBody(input);
+      if (!body) {
+        return {
+          status: "uncertain",
+          reason:
+            "La solicitud del QR de mostrador no cumple el contrato de Pey.",
+        };
+      }
+
+      const response = await request(`${BASE_URL}/codi/qr`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (!response) {
+        return {
+          status: "uncertain",
+          reason: "Pey no respondió al crear el QR de mostrador.",
+        };
+      }
+      if (response.status !== 201) {
+        const errorType = peyErrorType(await readJson(response));
+        return {
+          status: "uncertain",
+          reason: `Pey no confirmó el QR de mostrador (HTTP ${response.status}${errorType ? `, ${errorType}` : ""}).`,
+        };
+      }
+
+      const created = parseCounterCreated(await readJson(response));
+      if (!created) {
+        return {
+          status: "uncertain",
+          reason: "La respuesta de Pey no trae un QR de mostrador utilizable.",
         };
       }
       return created;
@@ -272,7 +313,10 @@ export function createRealPeyAdapter(options: RealPeyOptions): PeyAdapter {
       }
       if (response.status === 400) {
         const errorType = peyErrorType(await readJson(response));
-        return { status: "rejected", errorType: errorType ?? "INVALID_REQUEST" };
+        return {
+          status: "rejected",
+          errorType: errorType ?? "INVALID_REQUEST",
+        };
       }
       if (response.status !== 200) {
         const errorType = peyErrorType(await readJson(response));
@@ -359,6 +403,34 @@ function buildCreateBody(request: CreateQrRequest): string | null {
   return `{"amount":${amount},${fields.slice(1)}`;
 }
 
+/** Monto 0 y vigencia 0: el cliente escribe el importe y el código no vence. */
+function buildCounterBody(request: CreateCounterQrRequest): string | null {
+  if (
+    !Number.isInteger(request.numRef) ||
+    request.numRef < 0 ||
+    request.numRef > 9_999_999
+  ) {
+    return null;
+  }
+  if (!request.bankAccountId.trim() || request.bankAccountId.length > 128) {
+    return null;
+  }
+  if (!request.merchantId.trim() || request.merchantId.length > 128)
+    return null;
+  const concept = request.concept.trim();
+  if (!concept || concept.length > 140) return null;
+
+  const fields = JSON.stringify({
+    concept,
+    expiration: 0,
+    numRef: String(request.numRef),
+    generateImage: false,
+    bankAccountId: request.bankAccountId,
+    metadata: { merchantId: request.merchantId },
+  });
+  return `{"amount":0,${fields.slice(1)}`;
+}
+
 function buildPushBody(request: CreatePushRequest): string | null {
   if (!/^[0-9]{10}$/.test(request.phoneNumber)) return null;
   const shared = buildCreateBody({
@@ -391,7 +463,9 @@ function linkRequestError(request: CreatePaymentLinkRequest): string {
   return "INVALID_REQUEST";
 }
 
-function buildPaymentLinkBody(request: CreatePaymentLinkRequest): string | null {
+function buildPaymentLinkBody(
+  request: CreatePaymentLinkRequest,
+): string | null {
   if (linkRequestError(request) !== "INVALID_REQUEST") return null;
   if (!request.chargeId.trim() || request.chargeId.length > 128) return null;
   if (
@@ -470,7 +544,10 @@ function readLinkTransaction(item: unknown): PaymentLinkTransaction | null {
   if (typeof record.transactionId !== "string") return null;
   const transactionId = record.transactionId.trim();
   if (!transactionId || transactionId.length > 128) return null;
-  if (typeof record.amount !== "number" || typeof record.datePaid !== "number") {
+  if (
+    typeof record.amount !== "number" ||
+    typeof record.datePaid !== "number"
+  ) {
     return null;
   }
   const amount = pesosNumberToCents(record.amount);
@@ -618,6 +695,20 @@ function readExternalChargeId(metadata: unknown): string | null {
   const trimmed = chargeId.trim();
   if (!trimmed || trimmed.length > 128) return null;
   return trimmed;
+}
+
+function parseCounterCreated(json: unknown): CreateCounterQrOutcome | null {
+  if (!json || typeof json !== "object") return null;
+  const row = json as Record<string, unknown>;
+  if (typeof row.id !== "string" || !row.id.trim() || row.id.length > 128) {
+    return null;
+  }
+  if (typeof row.qrString !== "string" || !row.qrString.trim()) return null;
+  return {
+    status: "created",
+    peyQrId: row.id.trim(),
+    qrString: row.qrString,
+  };
 }
 
 function parseCreated(
