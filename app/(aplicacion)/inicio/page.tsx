@@ -17,6 +17,7 @@ import { requireMerchantContext } from "@/modules/identity/guards";
 import { getMerchantProfile } from "@/modules/merchant/service";
 import { getDailySummary, listRecentMovements } from "@/modules/sales/service";
 import { ROUTES } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Inicio",
@@ -70,14 +71,20 @@ async function HomeContent() {
 
         <Link
           href={ROUTES.confirmAmount}
-          className={buttonVariants({ variant: "outline", size: "md" })}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "md" }),
+            "w-full",
+          )}
         >
           <Keyboard aria-hidden="true" />
           Ingresar importe manualmente
         </Link>
         <Link
           href={ROUTES.counter}
-          className={buttonVariants({ variant: "outline", size: "md" })}
+          className={cn(
+            buttonVariants({ variant: "secondary", size: "md" }),
+            "w-full",
+          )}
         >
           <QrCode aria-hidden="true" />
           QR del mostrador
