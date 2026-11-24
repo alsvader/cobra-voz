@@ -154,8 +154,15 @@ describe("CounterScreen", () => {
     expect(
       screen.queryByRole("link", { name: /\$6\.00/ }),
     ).not.toBeInTheDocument();
+    const salesLink = screen.getByRole("link", {
+      name: "Ver todas las ventas",
+    });
+    const firstRow = screen.getByRole("link", { name: /\$1\.00/ });
+    expect(salesLink).toHaveAttribute("href", "/ventas");
+    expect(salesLink).toHaveTextContent("Ver todas");
     expect(
-      screen.getByRole("link", { name: "Ver todas las ventas" }),
-    ).toHaveAttribute("href", "/ventas");
+      salesLink.compareDocumentPosition(firstRow) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

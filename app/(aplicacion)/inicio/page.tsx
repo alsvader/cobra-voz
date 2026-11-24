@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PendingChargeNotice } from "@/components/charge/pending-charge-notice";
 import { VoiceCapture } from "@/components/charge/voice-capture";
+import { AllSalesLink } from "@/components/sales/all-sales-link";
 import { AppNav } from "@/components/sales/app-nav";
 import { DailySummary } from "@/components/sales/daily-summary";
 import { MovementHistory } from "@/components/sales/movement-history";
@@ -100,23 +101,18 @@ async function HomeContent() {
           count={summary.count}
         />
         <div className="flex flex-col gap-2">
-          <h2 className="text-base font-semibold text-foreground">
-            Movimientos recientes
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-foreground">
+              Movimientos recientes
+            </h2>
+            {recent.nextCursor ? <AllSalesLink /> : null}
+          </div>
           <MovementHistory
             variant="recent"
             from="inicio"
             initial={recent.movements}
             nextCursor={recent.nextCursor}
           />
-          {recent.nextCursor ? (
-            <Link
-              href={ROUTES.sales}
-              className={buttonVariants({ variant: "outline", size: "md" })}
-            >
-              Ver todas las ventas
-            </Link>
-          ) : null}
         </div>
       </section>
     </>

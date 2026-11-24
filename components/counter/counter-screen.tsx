@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import {
   announceVerifiedPayment,
   primePaymentSpeech,
@@ -13,9 +12,9 @@ import {
 } from "@/components/counter/payment-toast";
 import { CounterPaySteps } from "@/components/counter/pay-steps";
 import { CoDiQrCard } from "@/components/charge/codi-qr-card";
+import { AllSalesLink } from "@/components/sales/all-sales-link";
 import { TransactionRow } from "@/components/sales/transaction-row";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { ROUTES } from "@/lib/routes";
+import { Button } from "@/components/ui/button";
 import { formatMxn } from "@/modules/charges/amount";
 import {
   COUNTER_RECENT_LIMIT,
@@ -152,9 +151,12 @@ export function CounterScreen({
         aria-label="Pagos de este código"
         className="flex w-full flex-col gap-2 print:hidden"
       >
-        <h2 className="text-base font-semibold text-foreground">
-          Pagos de este código
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-foreground">
+            Pagos de este código
+          </h2>
+          {visiblePayments.length > 0 ? <AllSalesLink /> : null}
+        </div>
         {allowTestPayment ? (
           <div className="flex flex-col items-start gap-2">
             <Button
@@ -190,14 +192,6 @@ export function CounterScreen({
             ))}
           </ul>
         )}
-        {visiblePayments.length > 0 ? (
-          <Link
-            href={ROUTES.sales}
-            className={buttonVariants({ variant: "outline", size: "md" })}
-          >
-            Ver todas las ventas
-          </Link>
-        ) : null}
       </section>
     </div>
   );
