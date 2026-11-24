@@ -40,6 +40,10 @@ describe("VoiceCapture", () => {
   beforeEach(() => {
     push.mockClear();
     vi.stubGlobal("MediaRecorder", FakeRecorder);
+    Object.defineProperty(window, "isSecureContext", {
+      configurable: true,
+      value: true,
+    });
   });
 
   it("sin clave deja el micrófono inhabilitado y la captura manual a la vista", () => {
@@ -50,17 +54,36 @@ describe("VoiceCapture", () => {
     expect(screen.getByText(VOICE_COPY.unavailable)).toBeInTheDocument();
   });
 
+  it("sin https no pide el micrófono ni lo marca bloqueado", async () => {
+    Object.defineProperty(window, "isSecureContext", {
+      configurable: true,
+      value: false,
+    });
+    const getUserMedia = vi.fn();
+    mockMic(getUserMedia);
+    render(<VoiceCapture enabled />);
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Hablar para cobrar" }),
+    );
+    expect(await screen.findByText(VOICE_COPY.insecure)).toBeInTheDocument();
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(screen.queryByText(VOICE_COPY.denied)).not.toBeInTheDocument();
+  });
+
   it("micrófono denegado: avisa y no inventa un importe", async () => {
     mockMic(vi.fn().mockRejectedValue(new Error("denied")));
     render(<VoiceCapture enabled />);
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Hablar para cobrar" }));
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Hablar para cobrar" }),
+    );
     expect(await screen.findByText(VOICE_COPY.denied)).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
 
   it("un importe claro abre P02; un fallo de red no sale de Inicio", async () => {
-    const getUserMedia = vi.fn(async () =>
-      ({ getTracks: () => [{ stop: vi.fn() }] }) as unknown as MediaStream,
+    const getUserMedia = vi.fn(
+      async () =>
+        ({ getTracks: () => [{ stop: vi.fn() }] }) as unknown as MediaStream,
     );
     mockMic(getUserMedia);
     let respond: (value: Response) => void = () => {};
@@ -114,7 +137,9 @@ describe("P02 con frase de voz", () => {
   it("muestra lo escuchado y volver a hablar regresa a Inicio", () => {
     search.value = "centavos=15000&frase=ciento+cincuenta";
     render(<ConfirmAmountScreen />);
-    expect(screen.getByText(/Escuchamos/)).toHaveTextContent("ciento cincuenta");
+    expect(screen.getByText(/Escuchamos/)).toHaveTextContent(
+      "ciento cincuenta",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Volver a hablar" }));
     expect(push).toHaveBeenCalledWith("/inicio");
   });

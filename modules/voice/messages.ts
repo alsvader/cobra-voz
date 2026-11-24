@@ -6,17 +6,27 @@ export const VOICE_COPY = {
     "Por ahora la captura por voz no está disponible. Puedes cobrar ingresando el importe manualmente.",
   denied:
     "El micrófono está bloqueado. Habilítalo en el navegador o ingresa el importe manualmente.",
-  silent:
-    "No escuchamos nada. Mantén pulsado el micrófono mientras hablas.",
+  insecure:
+    "Desde esta dirección el iPhone no puede pedir el micrófono. Ábrela con https.",
+  silent: "No escuchamos nada. Mantén pulsado el micrófono mientras hablas.",
   network:
     "No pudimos oírte. Inténtalo de nuevo o ingresa el importe manualmente.",
   hold: "Mantén pulsado mientras hablas.",
+  /**
+   * La app instalada vuelve a pedir el micrófono en cada apertura. El botón
+   * solo acepta el permiso; la grabación sigue en «Hablar para cobrar».
+   */
+  installAllow:
+    "Para hablar y cobrar, acepta el micrófono. Esta app lo pide de nuevo cada vez que la abres.",
+  installAllowAction: "Permitir micrófono",
+  installAllowPending: "Esperando el permiso…",
 } as const;
 
 const ERROR_COPY: Record<VoiceError, string> = {
   invalid_audio: "No recibimos un audio válido.",
   too_large: "El audio es demasiado grande.",
-  too_long: "La grabación es demasiado larga. Di el importe en menos de 15 segundos.",
+  too_long:
+    "La grabación es demasiado larga. Di el importe en menos de 15 segundos.",
   rate_limited: "Espera un momento antes de volver a hablar.",
   unavailable: VOICE_COPY.unavailable,
   not_understood:

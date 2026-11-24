@@ -2,8 +2,12 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MicrophonePrimer } from "@/components/charge/microphone-primer";
 import { Notice } from "@/components/ui/notice";
-import { VoiceCaptureButton, type VoiceCaptureState } from "@/components/charge/voice-capture-button";
+import {
+  VoiceCaptureButton,
+  type VoiceCaptureState,
+} from "@/components/charge/voice-capture-button";
 import { ROUTES } from "@/lib/routes";
 import { VOICE_COPY } from "@/modules/voice/messages";
 
@@ -156,6 +160,10 @@ export function VoiceCapture({ enabled }: { enabled: boolean }) {
       }
       return;
     }
+    if (!window.isSecureContext) {
+      setMessage(VOICE_COPY.insecure);
+      return;
+    }
     busy.current = true;
     released.current = false;
     setMessage(null);
@@ -180,17 +188,16 @@ export function VoiceCapture({ enabled }: { enabled: boolean }) {
     const mime = supportedMime();
     const chunks: Blob[] = [];
     const started = Date.now();
-    const rec = new MediaRecorder(
-      media,
-      mime ? { mimeType: mime } : undefined,
-    );
+    const rec = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
     rec.addEventListener("dataavailable", (event) => {
       if (event.data.size > 0) chunks.push(event.data);
     });
     rec.addEventListener("stop", () => {
       stopStream();
       if (!visible.current) return;
-      const blob = new Blob(chunks, { type: rec.mimeType || mime || "audio/webm" });
+      const blob = new Blob(chunks, {
+        type: rec.mimeType || mime || "audio/webm",
+      });
       void upload(blob, Date.now() - started);
     });
     recorder.current = rec;
@@ -202,6 +209,7 @@ export function VoiceCapture({ enabled }: { enabled: boolean }) {
 
   return (
     <>
+      {enabled ? <MicrophonePrimer /> : null}
       <VoiceCaptureButton
         state={state}
         className="touch-none"
