@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isPrivatePath, loginUrl, sanitizeNextPath } from "./routes";
+import {
+  isPrivatePath,
+  loginUrl,
+  saleOrigin,
+  salePath,
+  sanitizeNextPath,
+} from "./routes";
 
 describe("isPrivatePath", () => {
   it("protege la app y la configuración, incluidas subrutas", () => {
@@ -55,6 +61,20 @@ describe("sanitizeNextPath", () => {
     }
     expect(sanitizeNextPath(null)).toBeNull();
     expect(sanitizeNextPath(undefined)).toBeNull();
+  });
+});
+
+describe("saleOrigin", () => {
+  it("conserva el mostrador para volver a esa pantalla", () => {
+    expect(saleOrigin("mostrador")).toBe("mostrador");
+    expect(salePath("3f2b8c1e-0000-4000-8000-000000000001", "mostrador")).toBe(
+      "/ventas/3f2b8c1e-0000-4000-8000-000000000001?desde=mostrador",
+    );
+  });
+
+  it("un origen desconocido vuelve a Ventas", () => {
+    expect(saleOrigin("otro")).toBe("ventas");
+    expect(saleOrigin(undefined)).toBe("ventas");
   });
 });
 

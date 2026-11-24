@@ -1,24 +1,42 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   announceVerifiedPayment,
   primePaymentSpeech,
 } from "@/adapters/speech/announce";
 import {
+  COUNTER_PAYMENT_METHOD,
   CounterPaymentToaster,
   showCounterPaymentToast,
 } from "@/components/counter/payment-toast";
 import { CounterPaySteps } from "@/components/counter/pay-steps";
 import { CoDiQrCard } from "@/components/charge/codi-qr-card";
-import { Button } from "@/components/ui/button";
+import { TransactionRow } from "@/components/sales/transaction-row";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { ROUTES } from "@/lib/routes";
 import { formatMxn } from "@/modules/charges/amount";
 import {
+  COUNTER_RECENT_LIMIT,
   COUNTER_TEST_PAYMENT_CENTS,
   type CounterPaymentDto,
 } from "@/modules/counter/types";
+import type { MovementDto } from "@/modules/sales/types";
 
 const POLL_MS = 5_000;
+
+function counterMovement(payment: CounterPaymentDto): MovementDto {
+  return {
+    id: payment.id,
+    reference: payment.reference,
+    status: "paid",
+    amountCents: payment.amountCents,
+    methodLabel: COUNTER_PAYMENT_METHOD,
+    occurredAt: payment.occurredAt,
+    occurredLabel: payment.occurredLabel,
+  };
+}
 
 export type CounterScreenProps = {
   merchantName: string;
@@ -41,6 +59,7 @@ export function CounterScreen({
   allowTestPayment = false,
 }: CounterScreenProps) {
   const [payments, setPayments] = useState(initialPayments);
+  const visiblePayments = payments.slice(0, COUNTER_RECENT_LIMIT);
   const [testing, setTesting] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const seen = useRef(new Set(initialPayments.map((payment) => payment.id)));
@@ -156,22 +175,29 @@ export function CounterScreen({
             ) : null}
           </div>
         ) : null}
-        {payments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+        {visiblePayments.length === 0 ? (
+          <p className="text-base text-muted-foreground">
             Cuando un cliente pague, el importe aparecerá aquí.
           </p>
         ) : (
-          <ul className="flex flex-col">
-            {payments.map((payment) => (
-              <li
+          <ul className="divide-y divide-border">
+            {visiblePayments.map((payment) => (
+              <TransactionRow
                 key={payment.id}
-                className="border-b border-border py-3 text-lg font-semibold tabular-nums text-foreground last:border-b-0"
-              >
-                {formatMxn(payment.amountCents)}
-              </li>
+                movement={counterMovement(payment)}
+                from="mostrador"
+              />
             ))}
           </ul>
         )}
+        {visiblePayments.length > 0 ? (
+          <Link
+            href={ROUTES.sales}
+            className={buttonVariants({ variant: "outline", size: "md" })}
+          >
+            Ver todas las ventas
+          </Link>
+        ) : null}
       </section>
     </div>
   );

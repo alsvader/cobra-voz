@@ -27,7 +27,7 @@ type Search = Promise<{ desde?: string }>;
 
 /**
  * A03 — Detalle. Solo lectura: no hay acción para marcar un pago. El origen
- * del «Volver» sale de `desde`, limitado a Inicio, Ventas o el cobro.
+ * del «Volver» sale de `desde`: Inicio, Ventas, el cobro o el mostrador.
  */
 export default function DetallePage({
   params,
@@ -59,7 +59,9 @@ async function DetailContent({
       ? { href: ROUTES.app, label: "Volver a Inicio" }
       : origin === "cobro" && parsed.success
         ? { href: chargePath(parsed.data), label: "Volver al cobro" }
-        : { href: ROUTES.sales, label: "Volver a Ventas" };
+        : origin === "mostrador"
+          ? { href: ROUTES.counter, label: "Volver al mostrador" }
+          : { href: ROUTES.sales, label: "Volver a Ventas" };
 
   const detail = parsed.success
     ? await getMovementDetail({ db: getDb() }, merchantId, parsed.data)

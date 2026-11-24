@@ -22,16 +22,16 @@ export function chargePath(chargeId: string): string {
   return `${ROUTES.charge}/${chargeId}`;
 }
 
-export type SaleOrigin = "inicio" | "ventas" | "cobro";
+export type SaleOrigin = "inicio" | "ventas" | "cobro" | "mostrador";
 
-/** A03. `from` dice a dónde vuelve «Volver»; solo se aceptan esos tres orígenes. */
+/** A03. `from` dice a dónde vuelve «Volver»; solo se aceptan esos orígenes. */
 export function salePath(chargeId: string, from?: SaleOrigin): string {
   const path = `${ROUTES.sales}/${chargeId}`;
   return from ? `${path}?desde=${from}` : path;
 }
 
 export function saleOrigin(raw: string | undefined): SaleOrigin {
-  if (raw === "inicio" || raw === "cobro") return raw;
+  if (raw === "inicio" || raw === "cobro" || raw === "mostrador") return raw;
   return "ventas";
 }
 

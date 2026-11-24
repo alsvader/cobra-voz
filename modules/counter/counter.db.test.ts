@@ -12,7 +12,11 @@ import {
 import { createTestDb } from "@/adapters/db/testing";
 import { createMockPeyAdapter } from "@/adapters/pey/mock";
 import type { CreateCounterQrRequest, PeyAdapter } from "@/adapters/pey/types";
-import { COUNTER_TEST_PAYMENT_CENTS } from "./types";
+import {
+  COUNTER_RECENT_LIMIT,
+  COUNTER_TEST_PAYMENT_CENTS,
+  type CounterPaymentDto,
+} from "./types";
 import {
   ensureCounterQr,
   listCounterPayments,
@@ -160,6 +164,26 @@ describe("simulateCounterPayment", () => {
       .from(payments)
       .where(eq(payments.chargeId, first.payment.id));
     expect(stored.evidence).toBe("provider_query");
+  });
+
+  it("deja en pantalla solo los cinco pagos más recientes", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const ready = await ensureCounterQr({ db, pey }, merchant.id);
+    expect(ready.status).toBe("ready");
+
+    const created: CounterPaymentDto[] = [];
+    for (let index = 0; index < COUNTER_RECENT_LIMIT + 1; index += 1) {
+      const result = await simulateCounterPayment({ db, pey }, merchant.id);
+      expect(result.status).toBe("paid");
+      if (result.status === "paid") created.push(result.payment);
+    }
+
+    const listed = await listCounterPayments(db, merchant.id);
+
+    expect(listed).toHaveLength(COUNTER_RECENT_LIMIT);
+    expect(listed[0]?.id).toBe(created.at(-1)?.id);
+    expect(listed.map((payment) => payment.id)).not.toContain(created[0]?.id);
   });
 
   it("no registra nada si el código no es de prueba", async () => {

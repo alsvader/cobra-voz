@@ -4,8 +4,14 @@ import type { Database } from "@/adapters/db/create-db";
 import { charges, counterQrs, merchants, payments } from "@/adapters/db/schema";
 import { isSimulatedQr, type MockPeyAdapter } from "@/adapters/pey/mock";
 import type { PeyAdapter } from "@/adapters/pey/types";
+import { chargeReference } from "@/modules/charges/reference";
 import { recordPeyPayment } from "@/modules/payments/service";
-import { COUNTER_TEST_PAYMENT_CENTS, type CounterPaymentDto } from "./types";
+import { formatOccurred } from "@/modules/sales/presentation";
+import {
+  COUNTER_RECENT_LIMIT,
+  COUNTER_TEST_PAYMENT_CENTS,
+  type CounterPaymentDto,
+} from "./types";
 
 export type { CounterPaymentDto } from "./types";
 export { COUNTER_TEST_PAYMENT_CENTS } from "./types";
@@ -122,6 +128,7 @@ export async function simulateCounterPayment(
       qrPayload: counterQrs.qrPayload,
       numRef: counterQrs.numRef,
       bankAccountId: merchants.peyBankAccountId,
+      timezone: merchants.timezone,
     })
     .from(counterQrs)
     .innerJoin(merchants, eq(merchants.id, counterQrs.merchantId))
@@ -177,25 +184,38 @@ export async function simulateCounterPayment(
   }
 
   const [created] = await deps.db
-    .select({ id: charges.id, amountCents: payments.amountCents })
+    .select({
+      id: charges.id,
+      amountCents: payments.amountCents,
+      paidAt: payments.paidAt,
+    })
     .from(payments)
     .innerJoin(charges, eq(charges.paidPaymentId, payments.id))
     .where(eq(payments.providerTransactionId, transactionId))
     .limit(1);
   if (!created) return { status: "unavailable" };
-  return { status: "paid", payment: created };
+  return {
+    status: "paid",
+    payment: presentCounterPayment(created, row.timezone),
+  };
 }
 
 /** Pagos conciliados de este código, del más reciente al más antiguo. */
 export async function listCounterPayments(
   db: Database,
   merchantId: string,
-  limit = 8,
+  limit = COUNTER_RECENT_LIMIT,
 ): Promise<CounterPaymentDto[]> {
-  return db
+  const [merchant] = await db
+    .select({ timezone: merchants.timezone })
+    .from(merchants)
+    .where(eq(merchants.id, merchantId))
+    .limit(1);
+  const rows = await db
     .select({
       id: charges.id,
       amountCents: payments.amountCents,
+      paidAt: payments.paidAt,
     })
     .from(charges)
     .innerJoin(payments, eq(payments.id, charges.paidPaymentId))
@@ -209,6 +229,23 @@ export async function listCounterPayments(
     )
     .orderBy(desc(payments.paidAt), desc(charges.id))
     .limit(limit);
+  return rows.map((row) => presentCounterPayment(row, merchant?.timezone));
+}
+
+function presentCounterPayment(
+  row: { id: string; amountCents: number; paidAt: Date },
+  timeZone: string | null | undefined,
+): CounterPaymentDto {
+  return {
+    id: row.id,
+    amountCents: row.amountCents,
+    reference: chargeReference(row.id),
+    occurredAt: row.paidAt.toISOString(),
+    occurredLabel: formatOccurred(
+      row.paidAt,
+      timeZone ?? "America/Mexico_City",
+    ),
+  };
 }
 
 async function readCounterQr(
