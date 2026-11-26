@@ -1,0 +1,2 @@
+ALTER TABLE "charges" ADD COLUMN "concept" text;--> statement-breakpoint
+ALTER TABLE "charges" ADD CONSTRAINT "charges_concept_length" CHECK ("charges"."concept" IS NULL OR char_length("charges"."concept") BETWEEN 1 AND 140);

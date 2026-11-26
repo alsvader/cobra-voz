@@ -60,6 +60,22 @@ describe("submitCharge", () => {
     expect(init.body as string).not.toMatch(/merchant/i);
   });
 
+  it("incluye el concepto recortado y omite uno vacío", async () => {
+    const fetchMock = respond(201, { charge, replayed: false });
+    await submitCharge({ ...input, concept: "  Café  " }, fetchMock as never);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject(
+      {
+        concept: "Café",
+      },
+    );
+
+    const empty = respond(201, { charge, replayed: false });
+    await submitCharge({ ...input, concept: "   " }, empty as never);
+    expect(
+      JSON.parse(empty.mock.calls[0][1].body as string),
+    ).not.toHaveProperty("concept");
+  });
+
   it("una repetición (200) se reporta como replayed", async () => {
     const result = await submitCharge(
       input,

@@ -12,6 +12,7 @@ import {
   centsToInputValue,
   parseAmountToCents,
 } from "@/modules/charges/amount";
+import { MAX_CONCEPT_LENGTH } from "@/modules/charges/concept";
 import { normalizeMxPhone } from "@/modules/charges/phone";
 
 export type CollectionMethod = "qr" | "pn" | "link";
@@ -20,6 +21,7 @@ export type ConfirmCharge = {
   cents: number;
   method: CollectionMethod;
   phoneNumber: string | null;
+  concept: string | null;
 };
 
 export type ConfirmResult =
@@ -86,6 +88,7 @@ export function AmountConfirmation({
   const [phase, setPhase] = useState<"idle" | "pending" | "accepted">("idle");
   const [method, setMethod] = useState<CollectionMethod>("qr");
   const [phoneDraft, setPhoneDraft] = useState("");
+  const [conceptDraft, setConceptDraft] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
   // Candado síncrono: dos clics seguidos no pueden disparar dos confirmaciones.
   const inFlight = useRef(false);
@@ -99,6 +102,7 @@ export function AmountConfirmation({
     setPhase("idle");
     setMethod("qr");
     setPhoneDraft("");
+    setConceptDraft("");
     setFailure(null);
     inFlight.current = false;
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -138,6 +142,7 @@ export function AmountConfirmation({
         cents,
         method,
         phoneNumber: phone,
+        concept: conceptDraft.trim() || null,
       });
       if (result.status === "accepted") {
         setPhase("accepted");
@@ -184,6 +189,15 @@ export function AmountConfirmation({
           disabled={locked}
         />
       ) : null}
+
+      <TextField
+        label="Concepto"
+        hint="Opcional. Tu cliente lo ve en su app."
+        maxLength={MAX_CONCEPT_LENGTH}
+        value={conceptDraft}
+        disabled={locked}
+        onChange={(event) => setConceptDraft(event.target.value)}
+      />
 
       <fieldset className="flex flex-col gap-3" disabled={locked}>
         <legend className="text-base font-semibold text-foreground">

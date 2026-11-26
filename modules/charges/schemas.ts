@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidAmountCents } from "./amount";
+import { MAX_CONCEPT_LENGTH, normalizeConcept } from "./concept";
 import { normalizeMxPhone } from "./phone";
 
 /**
@@ -21,8 +22,17 @@ export const createChargeSchema = z
     idempotencyKey: idempotencyKeySchema,
     method: z.enum(["qr", "pn", "link"]).default("qr"),
     phoneNumber: z.string().max(32).optional(),
+    concept: z.string().optional(),
   })
   .superRefine((value, ctx) => {
+    const concept = value.concept?.trim() ?? "";
+    if (concept.length > MAX_CONCEPT_LENGTH) {
+      ctx.addIssue({
+        code: "custom",
+        message: "El concepto es demasiado largo.",
+        path: ["concept"],
+      });
+    }
     if (value.method === "qr" || value.method === "link") {
       if (value.phoneNumber != null) {
         ctx.addIssue({
@@ -42,12 +52,14 @@ export const createChargeSchema = z
     }
   })
   .transform((value) => {
+    const concept = normalizeConcept(value.concept);
     if (value.method === "qr" || value.method === "link") {
       return {
         amountCents: value.amountCents,
         idempotencyKey: value.idempotencyKey,
         method: value.method,
         phoneNumber: null,
+        concept,
       };
     }
     return {
@@ -55,6 +67,7 @@ export const createChargeSchema = z
       idempotencyKey: value.idempotencyKey,
       method: "pn" as const,
       phoneNumber: normalizeMxPhone(value.phoneNumber ?? "")!,
+      concept,
     };
   });
 

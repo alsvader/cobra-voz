@@ -55,6 +55,7 @@ describe("createChargeSchema", () => {
     if (!result.success) return;
     expect(result.data.phoneNumber).toBe("5512345678");
     expect(result.data.method).toBe("pn");
+    expect(result.data.concept).toBeNull();
   });
 
   it("rechaza la lada y un QR que trae celular", () => {
@@ -85,6 +86,7 @@ describe("createChargeSchema", () => {
     if (!ok.success) return;
     expect(ok.data.method).toBe("link");
     expect(ok.data.phoneNumber).toBeNull();
+    expect(ok.data.concept).toBeNull();
     expect(
       createChargeSchema.safeParse({
         amountCents: 100,
@@ -93,6 +95,32 @@ describe("createChargeSchema", () => {
         phoneNumber: "5512345678",
       }).success,
     ).toBe(false);
+  });
+
+  it("recorta el concepto y rechaza más de 140 caracteres", () => {
+    const ok = createChargeSchema.safeParse({
+      amountCents: 100,
+      idempotencyKey: key,
+      concept: "  Café  ",
+    });
+    expect(ok.success).toBe(true);
+    if (!ok.success) return;
+    expect(ok.data.concept).toBe("Café");
+
+    expect(
+      createChargeSchema.safeParse({
+        amountCents: 100,
+        idempotencyKey: key,
+        concept: "x".repeat(141),
+      }).success,
+    ).toBe(false);
+    expect(
+      createChargeSchema.safeParse({
+        amountCents: 100,
+        idempotencyKey: key,
+        concept: "   ",
+      }).data?.concept,
+    ).toBeNull();
   });
 
   it("rechaza cuerpos que no son objeto", () => {

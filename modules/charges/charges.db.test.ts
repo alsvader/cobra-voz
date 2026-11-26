@@ -239,6 +239,32 @@ describe("createCharge — camino feliz", () => {
       result.ok ? result.charge.id : "",
     );
     expect(pey.calls[0].concept).toMatch(/^Cobro CV-/);
+    if (!result.ok) return;
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, result.charge.id));
+    expect(row.concept).toBeNull();
+  });
+
+  it("guarda el concepto escrito, lo envía a Pey y sigue calculando CV-", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const result = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 2500,
+      idempotencyKey: newKey(),
+      concept: "  Café de la mañana  ",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(pey.calls[0].concept).toBe("Café de la mañana");
+    expect(result.charge.reference).toMatch(/^CV-[0-9A-F]{8}$/);
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, result.charge.id));
+    expect(row.concept).toBe("Café de la mañana");
   });
 
   it("el DTO no expone merchantId, pey_qr_id ni numRef", async () => {
@@ -332,6 +358,32 @@ describe("createCharge — idempotencia", () => {
       .where(eq(charges.merchantId, merchant.id));
     expect(rows).toHaveLength(1);
     expect(rows[0].amountCents).toBe(15000);
+  });
+
+  it("misma clave con otro concepto es un conflicto y no crea nada", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const idempotencyKey = newKey();
+    await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15000,
+      idempotencyKey,
+      concept: "Café",
+    });
+
+    const conflict = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15000,
+      idempotencyKey,
+      concept: "Pan",
+    });
+
+    expect(conflict).toEqual({ ok: false, error: "idempotency_conflict" });
+    expect(pey.calls).toHaveLength(1);
+    const rows = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.merchantId, merchant.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].concept).toBe("Café");
   });
 
   it("intenciones distintas (claves distintas) son cobros distintos", async () => {
@@ -1142,6 +1194,7 @@ describe("createCharge — enlace", () => {
     expect(pey.linkCalls[0].backUrl).toContain("/enlace/pago-cancelado");
     expect(pey.calls).toHaveLength(0);
     expect(pey.pushCalls).toHaveLength(0);
+    expect(pey.linkCalls[0]).not.toHaveProperty("concept");
 
     const [row] = await db
       .select()
@@ -1154,6 +1207,28 @@ describe("createCharge — enlace", () => {
       .where(eq(paymentLinks.chargeId, result.charge.id));
     expect(links).toHaveLength(1);
     expect(links[0].url).toBe(result.charge.paymentLink?.url);
+  });
+
+  it("el enlace guarda el concepto y no lo manda a Pey", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const result = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15050,
+      idempotencyKey: newKey(),
+      method: "link",
+      concept: "Mesa 4",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.charge.reference).toMatch(/^CV-[0-9A-F]{8}$/);
+    expect(pey.linkCalls).toHaveLength(1);
+    expect(pey.linkCalls[0]).not.toHaveProperty("concept");
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, result.charge.id));
+    expect(row.concept).toBe("Mesa 4");
   });
 
   it("repetir la misma intención no crea otro enlace; otra forma sí choca", async () => {

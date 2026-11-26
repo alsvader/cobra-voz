@@ -115,6 +115,7 @@ describe("AmountConfirmation — captura manual desde cero", () => {
       cents: 29,
       method: "qr",
       phoneNumber: null,
+      concept: null,
     });
   });
 
@@ -128,6 +129,7 @@ describe("AmountConfirmation — captura manual desde cero", () => {
       cents: 8000,
       method: "qr",
       phoneNumber: null,
+      concept: null,
     });
   });
 
@@ -231,6 +233,7 @@ describe("AmountConfirmation — importe precargado", () => {
       cents: 20000,
       method: "qr",
       phoneNumber: null,
+      concept: null,
     });
   });
 
@@ -295,6 +298,7 @@ describe("AmountConfirmation — forma de cobro", () => {
       cents: 15050,
       method: "pn",
       phoneNumber: "5512345678",
+      concept: null,
     });
   });
 
@@ -327,6 +331,7 @@ describe("AmountConfirmation — forma de cobro", () => {
         cents: 15050,
         method: "pn",
         phoneNumber: "5512345678",
+        concept: null,
       });
     } finally {
       spy.mockRestore();
@@ -349,6 +354,45 @@ describe("AmountConfirmation — forma de cobro", () => {
     expect(confirmButton()).toBeDisabled();
   });
 
+  it("el concepto queda debajo del importe", () => {
+    setup();
+    const amount = screen.getByLabelText(/Importe a cobrar \(MXN\)/);
+    const concept = screen.getByLabelText("Concepto");
+    expect(
+      amount.compareDocumentPosition(concept) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("el concepto es opcional y, si lo escriben, viaja con la confirmación", async () => {
+    const { onConfirm, user } = setup({ initialCents: 15050 });
+    const field = screen.getByLabelText("Concepto");
+    expect(field).toHaveAttribute("maxLength", "140");
+
+    await user.type(field, "Café de la mañana");
+    await user.click(confirmButton());
+
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith({
+      cents: 15050,
+      method: "qr",
+      phoneNumber: null,
+      concept: "Café de la mañana",
+    });
+  });
+
+  it("un concepto en blanco se confirma como vacío", async () => {
+    const { onConfirm, user } = setup({ initialCents: 15050 });
+    await user.type(screen.getByLabelText("Concepto"), "   ");
+    await user.click(confirmButton());
+
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith({
+      cents: 15050,
+      method: "qr",
+      phoneNumber: null,
+      concept: null,
+    });
+  });
+
   it("el enlace no pide celular y confirma el importe capturado", async () => {
     const { onConfirm, user } = setup({ initialCents: 15050 });
     await user.click(screen.getByRole("radio", { name: "Enlace" }));
@@ -363,6 +407,7 @@ describe("AmountConfirmation — forma de cobro", () => {
       cents: 15050,
       method: "link",
       phoneNumber: null,
+      concept: null,
     });
   });
 });

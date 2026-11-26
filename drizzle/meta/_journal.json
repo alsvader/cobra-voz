@@ -50,6 +50,13 @@
       "when": 1795409505836,
       "tag": "0006_counter_qr",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795670773751,
+      "tag": "0007_charge_concept",
+      "breakpoints": true
     }
   ]
 }

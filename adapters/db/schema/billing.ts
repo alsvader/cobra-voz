@@ -71,6 +71,11 @@ export const charges = pgTable(
     phoneHash: text("phone_hash"),
     /** Últimos 4 dígitos, para mostrarlos en la pantalla de espera. */
     phoneLast4: text("phone_last4"),
+    /**
+     * Motivo que escribió el comercio. Null si no escribió uno: QR y
+     * notificación usan entonces `Cobro CV-…`. No sustituye a la referencia.
+     */
+    concept: text("concept"),
     ...timestamps,
   },
   (table) => [
@@ -111,6 +116,10 @@ export const charges = pgTable(
     check(
       "charges_creation_result",
       sql`${table.creationResult} IS NULL OR ${table.creationResult} in ('uncertain', 'rejected')`,
+    ),
+    check(
+      "charges_concept_length",
+      sql`${table.concept} IS NULL OR char_length(${table.concept}) BETWEEN 1 AND 140`,
     ),
   ],
 ).enableRLS();

@@ -16,6 +16,7 @@ import type {
   CreateQrOutcome,
   PeyAdapter,
 } from "@/adapters/pey/types";
+import { normalizeConcept } from "./concept";
 import { paymentLinkReturnUrls } from "./return-urls";
 import { phoneHash } from "./phone-hash";
 import { normalizeMxPhone, phoneLast4 } from "./phone";
@@ -45,6 +46,7 @@ type ChargeRequest = {
   idempotencyKey: string;
   method?: CreateChargeInput["method"];
   phoneNumber?: string | null;
+  concept?: string | null;
 };
 
 /**
@@ -329,6 +331,7 @@ export async function createCharge(
     );
   }
   const hashedPhone = phone ? phoneHash(phone) : null;
+  const concept = normalizeConcept(input.concept);
 
   const [merchant] = await db
     .select({ peyBankAccountId: merchants.peyBankAccountId })
@@ -346,6 +349,7 @@ export async function createCharge(
       collectionMethod: method,
       phoneHash: hashedPhone,
       phoneLast4: phone ? phoneLast4(phone) : null,
+      concept,
     })
     .onConflictDoNothing({
       target: [charges.merchantId, charges.idempotencyKey],
@@ -367,6 +371,7 @@ export async function createCharge(
     if (
       existing.charge.amountCents !== input.amountCents ||
       existingMethod !== method ||
+      existing.charge.concept !== concept ||
       (method === "pn" && existing.charge.phoneHash !== hashedPhone)
     ) {
       return { ok: false, error: "idempotency_conflict" };
@@ -388,7 +393,7 @@ export async function createCharge(
     const request = {
       chargeId: inserted.id,
       amountCents: inserted.amountCents,
-      concept: `Cobro ${reference}`,
+      concept: concept ?? `Cobro ${reference}`,
       numRef,
       expirationSeconds: QR_EXPIRATION_SECONDS,
       bankAccountId: merchant.peyBankAccountId,

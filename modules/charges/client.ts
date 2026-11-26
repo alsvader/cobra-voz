@@ -40,6 +40,7 @@ export async function submitCharge(
     idempotencyKey: string;
     method?: "qr" | "pn" | "link";
     phoneNumber?: string | null;
+    concept?: string | null;
   },
   fetchImpl: typeof fetch = fetch,
 ): Promise<SubmitChargeResult> {
@@ -48,6 +49,7 @@ export async function submitCharge(
     idempotencyKey: string;
     method: "qr" | "pn" | "link";
     phoneNumber?: string;
+    concept?: string;
   } = {
     amountCents: input.amountCents,
     idempotencyKey: input.idempotencyKey,
@@ -56,6 +58,7 @@ export async function submitCharge(
   if (payload.method === "pn" && input.phoneNumber) {
     payload.phoneNumber = input.phoneNumber;
   }
+  if (input.concept?.trim()) payload.concept = input.concept.trim();
   let response: Response;
   try {
     response = await fetchImpl("/api/charges", {
