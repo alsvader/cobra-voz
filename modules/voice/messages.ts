@@ -20,6 +20,8 @@ export const VOICE_COPY = {
     "Para hablar y cobrar, acepta el micrófono. Esta app lo pide de nuevo cada vez que la abres.",
   installAllowAction: "Permitir micrófono",
   installAllowPending: "Esperando el permiso…",
+  installDismissed: "No aceptaste el micrófono. Puedes intentarlo de nuevo.",
+  installRetryAction: "Reintentar",
 } as const;
 
 const ERROR_COPY: Record<VoiceError, string> = {

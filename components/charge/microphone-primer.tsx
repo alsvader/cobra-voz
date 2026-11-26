@@ -44,6 +44,7 @@ export function MicrophonePrimer() {
   const [visible, setVisible] = useState(false);
   const [pending, setPending] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [insecure, setInsecure] = useState(false);
 
   useEffect(() => {
@@ -80,7 +81,7 @@ export function MicrophonePrimer() {
     } catch (error) {
       const rejected =
         error instanceof DOMException && error.name === "NotAllowedError";
-      if (rejected) setBlocked(true);
+      if (rejected) setDismissed(true);
     } finally {
       setPending(false);
     }
@@ -90,7 +91,7 @@ export function MicrophonePrimer() {
 
   return (
     <Notice
-      tone={blocked || insecure ? "warning" : "info"}
+      tone={blocked || dismissed || insecure ? "warning" : "info"}
       label="Micrófono"
       className="w-full"
       action={
@@ -105,7 +106,9 @@ export function MicrophonePrimer() {
           >
             {pending
               ? VOICE_COPY.installAllowPending
-              : VOICE_COPY.installAllowAction}
+              : dismissed
+                ? VOICE_COPY.installRetryAction
+                : VOICE_COPY.installAllowAction}
           </Button>
         )
       }
@@ -114,7 +117,9 @@ export function MicrophonePrimer() {
         ? VOICE_COPY.insecure
         : blocked
           ? VOICE_COPY.denied
-          : VOICE_COPY.installAllow}
+          : dismissed
+            ? VOICE_COPY.installDismissed
+            : VOICE_COPY.installAllow}
     </Notice>
   );
 }

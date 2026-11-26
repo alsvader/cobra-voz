@@ -105,10 +105,12 @@ describe("MicrophonePrimer", () => {
     expect(getUserMedia).not.toHaveBeenCalled();
   });
 
-  it("si rechazan el diálogo, el aviso explica el bloqueo y no graba", async () => {
+  it("si rechazan el diálogo, ofrece reintentar y un segundo permiso oculta el aviso", async () => {
+    const stop = vi.fn();
     const getUserMedia = vi
       .fn()
-      .mockRejectedValue(new DOMException("denied", "NotAllowedError"));
+      .mockRejectedValueOnce(new DOMException("denied", "NotAllowedError"))
+      .mockResolvedValueOnce({ getTracks: () => [{ stop }] });
     const Recorder = vi.fn();
     vi.stubGlobal("MediaRecorder", Recorder);
     install({ installed: true, permission: "prompt", getUserMedia });
@@ -120,11 +122,23 @@ describe("MicrophonePrimer", () => {
       }),
     );
 
-    expect(await screen.findByText(VOICE_COPY.denied)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: VOICE_COPY.installAllowAction }),
-    ).not.toBeInTheDocument();
+      await screen.findByText(VOICE_COPY.installDismissed),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(VOICE_COPY.denied)).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: VOICE_COPY.installRetryAction }),
+    );
+
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    expect(stop).toHaveBeenCalledOnce();
     expect(Recorder).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(
+        screen.queryByText(VOICE_COPY.installDismissed),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("si el sistema no dice el estado, igual ofrece el botón", async () => {
