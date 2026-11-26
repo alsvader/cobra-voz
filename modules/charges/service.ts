@@ -594,15 +594,12 @@ export async function getCharge(
   return settled?.charge ?? null;
 }
 
-const RESUMABLE_STATUSES = [
-  "created",
-  "waiting_payment",
-  "qr_uncertain",
-] as const;
+const RESUMABLE_STATUSES = ["created", "waiting_payment"] as const;
 
 /**
- * Cobro que Inicio puede ofrecer al reabrir la app (UF-07). El más reciente
- * que sigue en curso o sin QR confirmado. Un cobro ya pagado no se anuncia.
+ * Cobro en curso que Inicio puede ofrecer con «Retomar cobro». El más reciente
+ * que sigue en `created` o `waiting_payment`. Un cobro sin confirmar
+ * (`qr_uncertain`) no se retoma desde aquí: Inicio avisa y manda a Ventas.
  */
 export async function findResumableCharge(
   deps: Pick<ChargesDeps, "db" | "now">,
@@ -632,13 +629,30 @@ export async function findResumableCharge(
     const settled = await settleCharge(deps, merchantId, row);
     if (
       settled.charge.status === "created" ||
-      settled.charge.status === "waiting_payment" ||
-      settled.charge.status === "qr_uncertain"
+      settled.charge.status === "waiting_payment"
     ) {
       return toDto(settled.charge, settled.qr, settled.link);
     }
   }
   return null;
+}
+
+/** Hay al menos un cobro cuyo instrumento no se pudo confirmar. */
+export async function hasUnconfirmedCharge(
+  deps: Pick<ChargesDeps, "db">,
+  merchantId: string,
+): Promise<boolean> {
+  const [row] = await deps.db
+    .select({ id: charges.id })
+    .from(charges)
+    .where(
+      and(
+        eq(charges.merchantId, merchantId),
+        eq(charges.status, "qr_uncertain"),
+      ),
+    )
+    .limit(1);
+  return row != null;
 }
 
 export type CloseChargeResult =

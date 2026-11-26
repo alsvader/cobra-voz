@@ -34,7 +34,8 @@ async function addCharge(
   merchantId: string,
   options: {
     amountCents?: number;
-    status?: "waiting_payment" | "paid" | "incident" | "expired";
+    status?:
+      "waiting_payment" | "paid" | "incident" | "expired" | "qr_uncertain";
     createdAt?: Date;
     expiresAt?: Date | null;
     paidAt?: Date | null;
@@ -393,6 +394,44 @@ describe("listMovements", () => {
       status: "expired",
     });
     expect(summary).toEqual({ totalCents: 0, count: 0 });
+  });
+
+  it("un filtro solo trae ese estado y la página siguiente no se sale", async () => {
+    const merchant = await newMerchant();
+    const first = await addCharge(merchant.id, {
+      status: "qr_uncertain",
+      createdAt: new Date("2026-11-15T12:00:00.000Z"),
+    });
+    const second = await addCharge(merchant.id, {
+      status: "qr_uncertain",
+      createdAt: new Date("2026-11-15T13:00:00.000Z"),
+    });
+    const third = await addCharge(merchant.id, {
+      status: "qr_uncertain",
+      createdAt: new Date("2026-11-15T14:00:00.000Z"),
+    });
+    await addCharge(merchant.id, {
+      paidAt: new Date("2026-11-15T18:00:00.000Z"),
+    });
+
+    const page = await listMovements({ db, now: () => NOON }, merchant.id, {
+      status: "qr_uncertain",
+      limit: 2,
+    });
+    if (!page.ok) throw new Error("cursor");
+    expect(page.movements.map((row) => row.id)).toEqual([third, second]);
+    expect(page.movements.every((row) => row.status === "qr_uncertain")).toBe(
+      true,
+    );
+
+    const next = await listMovements({ db, now: () => NOON }, merchant.id, {
+      status: "qr_uncertain",
+      limit: 2,
+      cursor: page.nextCursor,
+    });
+    if (!next.ok) throw new Error("cursor");
+    expect(next.movements.map((row) => row.id)).toEqual([first]);
+    expect(next.nextCursor).toBeNull();
   });
 
   it("rechaza un cursor mal formado", async () => {

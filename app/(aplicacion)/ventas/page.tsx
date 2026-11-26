@@ -4,10 +4,12 @@ import { getDb } from "@/adapters/db/client";
 import { AppNav } from "@/components/sales/app-nav";
 import { DailySummary } from "@/components/sales/daily-summary";
 import { MovementHistory } from "@/components/sales/movement-history";
+import { MovementStatusFilter } from "@/components/sales/movement-status-filter";
 import { RefreshOnShow } from "@/components/sales/refresh-on-show";
 import { AppShell } from "@/components/ui/app-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireMerchantContext } from "@/modules/identity/guards";
+import { parseMovementStatus } from "@/modules/sales/filter";
 import { getDailySummary, listMovements } from "@/modules/sales/service";
 
 export const metadata: Metadata = {
@@ -15,22 +17,25 @@ export const metadata: Metadata = {
   description: "Total de hoy e historial de movimientos.",
 };
 
-export default function VentasPage() {
+type Search = Promise<{ estado?: string }>;
+
+export default function VentasPage({ searchParams }: { searchParams: Search }) {
   return (
     <AppShell bottomNav={<AppNav current="ventas" />}>
       <Suspense fallback={<SalesSkeleton />}>
-        <SalesContent />
+        <SalesContent searchParams={searchParams} />
       </Suspense>
     </AppShell>
   );
 }
 
-async function SalesContent() {
+async function SalesContent({ searchParams }: { searchParams: Search }) {
   const { merchantId } = await requireMerchantContext();
+  const status = parseMovementStatus((await searchParams).estado);
   const db = getDb();
   const [summary, page] = await Promise.all([
     getDailySummary({ db }, merchantId),
-    listMovements({ db }, merchantId),
+    listMovements({ db }, merchantId, { status }),
   ]);
   const history = page.ok ? page : { movements: [], nextCursor: null };
 
@@ -45,9 +50,12 @@ async function SalesContent() {
       />
       <section aria-label="Movimientos" className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">Movimientos</h2>
+        <MovementStatusFilter status={status} />
         <MovementHistory
+          key={status ?? "todos"}
           variant="history"
           from="ventas"
+          status={status}
           initial={history.movements}
           nextCursor={history.nextCursor}
         />

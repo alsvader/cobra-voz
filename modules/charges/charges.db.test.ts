@@ -22,6 +22,7 @@ import {
   closeCharge,
   createCharge,
   findResumableCharge,
+  hasUnconfirmedCharge,
   getCharge,
 } from "./service";
 
@@ -1152,7 +1153,7 @@ describe("findResumableCharge", () => {
     expect((await rowOf(created.charge.id)).status).toBe("expired");
   });
 
-  it("un QR incierto se puede retomar para conservar la referencia", async () => {
+  it("un cobro sin confirmar no se ofrece para retomar", async () => {
     const merchant = await newMerchant();
     const created = await createCharge(
       { db, pey: createMockPeyAdapter() },
@@ -1163,8 +1164,28 @@ describe("findResumableCharge", () => {
 
     const pending = await findResumableCharge({ db }, merchant.id);
 
-    expect(pending?.status).toBe("qr_uncertain");
-    expect(pending?.reference).toBe(created.charge.reference);
+    expect(pending).toBeNull();
+    expect(await hasUnconfirmedCharge({ db }, merchant.id)).toBe(true);
+  });
+
+  it("un cobro en espera se retoma aunque haya otro sin confirmar", async () => {
+    const merchant = await newMerchant();
+    await createCharge({ db, pey: createMockPeyAdapter() }, merchant.id, {
+      amountCents: 1301,
+      idempotencyKey: newKey(),
+    });
+    const waiting = await createCharge(
+      { db, pey: createMockPeyAdapter() },
+      merchant.id,
+      { amountCents: 2500, idempotencyKey: newKey() },
+    );
+    if (!waiting.ok) throw new Error("setup");
+
+    const pending = await findResumableCharge({ db }, merchant.id);
+
+    expect(pending?.id).toBe(waiting.charge.id);
+    expect(pending?.status).toBe("waiting_payment");
+    expect(await hasUnconfirmedCharge({ db }, merchant.id)).toBe(true);
   });
 });
 

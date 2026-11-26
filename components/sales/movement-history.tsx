@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Notice } from "@/components/ui/notice";
 import type { SaleOrigin } from "@/lib/routes";
+import type { ChargeStatus } from "@/modules/charges/types";
+import { salesApiPath } from "@/modules/sales/filter";
 import type { MovementDto } from "@/modules/sales/types";
 
 export type MovementHistoryProps = {
@@ -15,6 +17,8 @@ export type MovementHistoryProps = {
   from: SaleOrigin;
   /** P01 muestra un texto breve; P04, el estado vacío completo y «cargar más». */
   variant: "recent" | "history";
+  /** Estado elegido en Ventas. `null` es el historial completo. */
+  status?: ChargeStatus | null;
 };
 
 /**
@@ -26,6 +30,7 @@ export function MovementHistory({
   nextCursor,
   from,
   variant,
+  status = null,
 }: MovementHistoryProps) {
   const [items, setItems] = useState(initial);
   const [cursor, setCursor] = useState(nextCursor);
@@ -33,7 +38,12 @@ export function MovementHistory({
   const [failed, setFailed] = useState(false);
   const snapshot = initial
     .map((movement) =>
-      [movement.id, movement.status, movement.amountCents, movement.occurredAt].join(":"),
+      [
+        movement.id,
+        movement.status,
+        movement.amountCents,
+        movement.occurredAt,
+      ].join(":"),
     )
     .join("|");
   const [seen, setSeen] = useState(snapshot);
@@ -50,10 +60,9 @@ export function MovementHistory({
     setLoading(true);
     setFailed(false);
     try {
-      const response = await fetch(
-        `/api/sales?cursor=${encodeURIComponent(cursor)}`,
-        { cache: "no-store" },
-      );
+      const response = await fetch(salesApiPath(cursor, status), {
+        cache: "no-store",
+      });
       if (!response.ok) {
         setFailed(true);
         return;
@@ -81,6 +90,15 @@ export function MovementHistory({
         <p className="text-base text-muted-foreground">
           Aún no tienes movimientos.
         </p>
+      );
+    }
+    if (status) {
+      return (
+        <EmptyState
+          icon={ReceiptText}
+          title="No hay cobros en este estado"
+          description="Prueba con otro estado. El total de hoy solo suma los pagos confirmados."
+        />
       );
     }
     return (

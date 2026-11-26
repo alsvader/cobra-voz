@@ -33,24 +33,4 @@ describe("PendingChargeNotice", () => {
       `/cobro/${charge.id}`,
     );
   });
-
-  it("un QR sin confirmar conserva la referencia y no invita a cobrar de nuevo", () => {
-    render(
-      <PendingChargeNotice
-        charge={{
-          ...charge,
-          status: "qr_uncertain",
-          qr: null,
-          expiresAt: null,
-        }}
-      />,
-    );
-
-    expect(screen.getByText("Cobro sin confirmar")).toBeInTheDocument();
-    expect(screen.getByText(/CV-3F2B8C1E/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Ver cobro" })).toHaveAttribute(
-      "href",
-      `/cobro/${charge.id}`,
-    );
-  });
 });

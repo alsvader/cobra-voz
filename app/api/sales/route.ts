@@ -1,5 +1,6 @@
 import { getDb } from "@/adapters/db/client";
 import { withMerchantApi } from "@/modules/identity/api";
+import { parseMovementStatus } from "@/modules/sales/filter";
 import { listMovements } from "@/modules/sales/service";
 import { errorJson, privateJson } from "@/lib/security/responses";
 
@@ -8,11 +9,20 @@ import { errorJson, privateJson } from "@/lib/security/responses";
  * reciente al más antiguo. El cursor viene de la respuesta anterior.
  */
 export const GET = withMerchantApi(async (request, { merchantId }) => {
-  const cursor = new URL(request.url).searchParams.get("cursor");
+  const url = new URL(request.url);
+  const cursor = url.searchParams.get("cursor");
+  const status = parseMovementStatus(url.searchParams.get("estado"));
   try {
-    const page = await listMovements({ db: getDb() }, merchantId, { cursor });
+    const page = await listMovements({ db: getDb() }, merchantId, {
+      cursor,
+      status,
+    });
     if (!page.ok) {
-      return errorJson(400, "invalid_cursor", "No pudimos continuar el historial.");
+      return errorJson(
+        400,
+        "invalid_cursor",
+        "No pudimos continuar el historial.",
+      );
     }
     return privateJson({
       movements: page.movements,

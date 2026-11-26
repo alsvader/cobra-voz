@@ -7,13 +7,17 @@ import { AppShell } from "@/components/ui/app-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PendingChargeNotice } from "@/components/charge/pending-charge-notice";
+import { UnconfirmedChargesNotice } from "@/components/charge/unconfirmed-charges-notice";
 import { VoiceCapture } from "@/components/charge/voice-capture";
 import { AllSalesLink } from "@/components/sales/all-sales-link";
 import { AppNav } from "@/components/sales/app-nav";
 import { DailySummary } from "@/components/sales/daily-summary";
 import { MovementHistory } from "@/components/sales/movement-history";
 import { RefreshOnShow } from "@/components/sales/refresh-on-show";
-import { findResumableCharge } from "@/modules/charges/service";
+import {
+  findResumableCharge,
+  hasUnconfirmedCharge,
+} from "@/modules/charges/service";
 import { requireMerchantContext } from "@/modules/identity/guards";
 import { getMerchantProfile } from "@/modules/merchant/service";
 import { getDailySummary, listRecentMovements } from "@/modules/sales/service";
@@ -45,6 +49,7 @@ async function HomeContent() {
     getDailySummary({ db }, merchantId),
     listRecentMovements({ db }, merchantId),
   ]);
+  const unconfirmed = await hasUnconfirmedCharge({ db }, merchantId);
 
   return (
     <>
@@ -91,6 +96,7 @@ async function HomeContent() {
           QR del mostrador
         </Link>
 
+        {unconfirmed ? <UnconfirmedChargesNotice /> : null}
         {pending ? <PendingChargeNotice charge={pending} /> : null}
       </section>
 

@@ -12,6 +12,7 @@ import {
 import { chargeReference } from "@/modules/charges/reference";
 import { chargeIdSchema } from "@/modules/charges/schemas";
 import { loadSettledCharge } from "@/modules/charges/service";
+import type { ChargeStatus } from "@/modules/charges/types";
 import { businessDayRange, resolveTimeZone } from "./business-day";
 import { formatOccurred, movementExplanation } from "./presentation";
 import type { DailySummary, MovementDetail, MovementPage } from "./types";
@@ -127,7 +128,11 @@ export async function getDailySummary(
 export async function listMovements(
   deps: SalesDeps,
   merchantId: string,
-  options: { limit?: number; cursor?: string | null } = {},
+  options: {
+    limit?: number;
+    cursor?: string | null;
+    status?: ChargeStatus | null;
+  } = {},
 ): Promise<ListMovementsResult> {
   const now = (deps.now ?? (() => new Date()))();
   const zone = await timeZoneOf(deps.db, merchantId);
@@ -161,6 +166,7 @@ export async function listMovements(
     .where(
       and(
         eq(charges.merchantId, merchantId),
+        options.status ? eq(charges.status, options.status) : undefined,
         cursor
           ? sql`(
               ${sortAt()} < ${cursor.occurredAt.toISOString()}::timestamptz
