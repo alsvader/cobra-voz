@@ -2,7 +2,11 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MicrophonePrimer } from "@/components/charge/microphone-primer";
+import {
+  isInstalledApp,
+  MicrophonePrimer,
+  type TalkMicResult,
+} from "@/components/charge/microphone-primer";
 import { Notice } from "@/components/ui/notice";
 import {
   VoiceCaptureButton,
@@ -42,6 +46,7 @@ export function VoiceCapture({ enabled }: { enabled: boolean }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [talkResult, setTalkResult] = useState<TalkMicResult | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const released = useRef(false);
@@ -172,11 +177,19 @@ export function VoiceCapture({ enabled }: { enabled: boolean }) {
     let media: MediaStream;
     try {
       media = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
+    } catch (error) {
+      const rejected =
+        error instanceof DOMException && error.name === "NotAllowedError";
+      if (rejected && isInstalledApp()) {
+        setTalkResult("dismissed");
+        finish();
+        return;
+      }
       setMessage(VOICE_COPY.denied);
       finish();
       return;
     }
+    setTalkResult("granted");
     stream.current = media;
 
     if (released.current || !visible.current) {
@@ -209,7 +222,12 @@ export function VoiceCapture({ enabled }: { enabled: boolean }) {
 
   return (
     <>
-      {enabled ? <MicrophonePrimer /> : null}
+      {enabled ? (
+        <MicrophonePrimer
+          talkResult={talkResult}
+          onGranted={() => setTalkResult("granted")}
+        />
+      ) : null}
       <VoiceCaptureButton
         state={state}
         className="touch-none"

@@ -36,16 +36,26 @@ async function microphonePermission(): Promise<MicPermission> {
   }
 }
 
+export type TalkMicResult = "dismissed" | "granted";
+
 /**
  * Pide el micrófono al entrar a la app instalada. No graba: el audio solo
- * empieza al mantener pulsado «Hablar para cobrar».
+ * empieza al mantener pulsado «Hablar para cobrar». Si ese botón ya pidió
+ * el permiso, `talkResult` actualiza este aviso en lugar de abrir otra card.
  */
-export function MicrophonePrimer() {
+export function MicrophonePrimer({
+  talkResult = null,
+  onGranted,
+}: {
+  talkResult?: TalkMicResult | null;
+  onGranted?: () => void;
+}) {
   const [visible, setVisible] = useState(false);
   const [pending, setPending] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [insecure, setInsecure] = useState(false);
+  const rejected = dismissed || talkResult === "dismissed";
 
   useEffect(() => {
     let cancelled = false;
@@ -78,20 +88,23 @@ export function MicrophonePrimer() {
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
       for (const track of media.getTracks()) track.stop();
       setVisible(false);
+      onGranted?.();
     } catch (error) {
-      const rejected =
+      const cancelled =
         error instanceof DOMException && error.name === "NotAllowedError";
-      if (rejected) setDismissed(true);
+      if (cancelled) setDismissed(true);
     } finally {
       setPending(false);
     }
   }
 
-  if (!visible) return null;
+  if (talkResult === "granted" || (!visible && talkResult !== "dismissed")) {
+    return null;
+  }
 
   return (
     <Notice
-      tone={blocked || dismissed || insecure ? "warning" : "info"}
+      tone={blocked || rejected || insecure ? "warning" : "info"}
       label="Micrófono"
       className="w-full"
       action={
@@ -106,7 +119,7 @@ export function MicrophonePrimer() {
           >
             {pending
               ? VOICE_COPY.installAllowPending
-              : dismissed
+              : rejected
                 ? VOICE_COPY.installRetryAction
                 : VOICE_COPY.installAllowAction}
           </Button>
@@ -117,7 +130,7 @@ export function MicrophonePrimer() {
         ? VOICE_COPY.insecure
         : blocked
           ? VOICE_COPY.denied
-          : dismissed
+          : rejected
             ? VOICE_COPY.installDismissed
             : VOICE_COPY.installAllow}
     </Notice>

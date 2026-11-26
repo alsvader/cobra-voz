@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmAmountScreen } from "@/components/charge/confirm-amount-screen";
 import { VoiceCapture } from "@/components/charge/voice-capture";
@@ -36,8 +36,25 @@ function mockMic(getUserMedia: ReturnType<typeof vi.fn>) {
   });
 }
 
+function installApp() {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query === "(display-mode: standalone)",
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    dispatchEvent: () => false,
+  }));
+  Object.defineProperty(navigator, "permissions", {
+    configurable: true,
+    value: {
+      query: vi.fn(async () => ({ state: "prompt" })),
+    },
+  });
+}
+
 describe("VoiceCapture", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     push.mockClear();
     vi.stubGlobal("MediaRecorder", FakeRecorder);
     Object.defineProperty(window, "isSecureContext", {
@@ -67,6 +84,74 @@ describe("VoiceCapture", () => {
     );
     expect(await screen.findByText(VOICE_COPY.insecure)).toBeInTheDocument();
     expect(getUserMedia).not.toHaveBeenCalled();
+    expect(screen.queryByText(VOICE_COPY.denied)).not.toBeInTheDocument();
+  });
+
+  it("en la app instalada, cancelar desde hablar deja una sola card de reintento", async () => {
+    installApp();
+    const getUserMedia = vi
+      .fn()
+      .mockRejectedValueOnce(new DOMException("denied", "NotAllowedError"))
+      .mockResolvedValueOnce({
+        getTracks: () => [{ stop: vi.fn() }],
+      });
+    mockMic(getUserMedia);
+    render(<VoiceCapture enabled />);
+    expect(
+      await screen.findByRole("button", {
+        name: VOICE_COPY.installAllowAction,
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Hablar para cobrar" }),
+    );
+
+    expect(
+      await screen.findByText(VOICE_COPY.installDismissed),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: VOICE_COPY.installRetryAction }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(VOICE_COPY.denied)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: VOICE_COPY.installAllowAction }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: VOICE_COPY.installRetryAction }),
+    );
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(
+        screen.queryByText(VOICE_COPY.installDismissed),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("en la app instalada, conceder desde hablar oculta el aviso", async () => {
+    installApp();
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [{ stop: vi.fn() }],
+    }));
+    mockMic(getUserMedia);
+    render(<VoiceCapture enabled />);
+    expect(
+      await screen.findByRole("button", {
+        name: VOICE_COPY.installAllowAction,
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Hablar para cobrar" }),
+    );
+
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: VOICE_COPY.installAllowAction }),
+      ).not.toBeInTheDocument();
+    });
     expect(screen.queryByText(VOICE_COPY.denied)).not.toBeInTheDocument();
   });
 
