@@ -41,17 +41,25 @@ export const POST = withMerchantApi(async (request, { merchantId }) => {
     );
 
     if (!result.ok) {
-      return result.error === "idempotency_conflict"
-        ? errorJson(
-            409,
-            "idempotency_conflict",
-            "Esta solicitud ya se usó con otros datos. Inicia un cobro nuevo.",
-          )
-        : errorJson(
-            403,
-            "no_merchant",
-            "Tu cuenta no tiene un comercio asignado.",
-          );
+      if (result.error === "idempotency_conflict") {
+        return errorJson(
+          409,
+          "idempotency_conflict",
+          "Esta solicitud ya se usó con otros datos. Inicia un cobro nuevo.",
+        );
+      }
+      if (result.error === "reference_in_use") {
+        return errorJson(
+          409,
+          "reference_in_use",
+          "Esa referencia ya está en un cobro vigente. Elige otra.",
+        );
+      }
+      return errorJson(
+        403,
+        "no_merchant",
+        "Tu cuenta no tiene un comercio asignado.",
+      );
     }
 
     return privateJson(

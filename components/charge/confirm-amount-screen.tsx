@@ -43,6 +43,7 @@ export function ConfirmAmountScreen() {
     method: ConfirmCharge["method"];
     phone: string | null;
     concept: string | null;
+    numRef: number | null;
   } | null>(null);
 
   async function handleConfirm(charge: ConfirmCharge): Promise<ConfirmResult> {
@@ -50,7 +51,8 @@ export function ConfirmAmountScreen() {
       intention.current?.cents !== charge.cents ||
       intention.current.method !== charge.method ||
       intention.current.phone !== charge.phoneNumber ||
-      intention.current.concept !== charge.concept
+      intention.current.concept !== charge.concept ||
+      intention.current.numRef !== charge.numRef
     ) {
       intention.current = {
         key: newIdempotencyKey(),
@@ -58,6 +60,7 @@ export function ConfirmAmountScreen() {
         method: charge.method,
         phone: charge.phoneNumber,
         concept: charge.concept,
+        numRef: charge.numRef,
       };
     }
 
@@ -67,6 +70,7 @@ export function ConfirmAmountScreen() {
       method: charge.method,
       phoneNumber: charge.phoneNumber,
       concept: charge.concept,
+      numRef: charge.numRef,
     });
 
     if (result.kind === "unauthenticated") {

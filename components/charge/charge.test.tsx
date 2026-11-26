@@ -116,6 +116,7 @@ describe("AmountConfirmation — captura manual desde cero", () => {
       method: "qr",
       phoneNumber: null,
       concept: null,
+      numRef: null,
     });
   });
 
@@ -130,6 +131,7 @@ describe("AmountConfirmation — captura manual desde cero", () => {
       method: "qr",
       phoneNumber: null,
       concept: null,
+      numRef: null,
     });
   });
 
@@ -234,6 +236,7 @@ describe("AmountConfirmation — importe precargado", () => {
       method: "qr",
       phoneNumber: null,
       concept: null,
+      numRef: null,
     });
   });
 
@@ -299,6 +302,7 @@ describe("AmountConfirmation — forma de cobro", () => {
       method: "pn",
       phoneNumber: "5512345678",
       concept: null,
+      numRef: null,
     });
   });
 
@@ -332,6 +336,7 @@ describe("AmountConfirmation — forma de cobro", () => {
         method: "pn",
         phoneNumber: "5512345678",
         concept: null,
+        numRef: null,
       });
     } finally {
       spy.mockRestore();
@@ -358,8 +363,13 @@ describe("AmountConfirmation — forma de cobro", () => {
     setup();
     const amount = screen.getByLabelText(/Importe a cobrar \(MXN\)/);
     const concept = screen.getByLabelText("Concepto");
+    const reference = screen.getByLabelText("Referencia");
     expect(
       amount.compareDocumentPosition(concept) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      concept.compareDocumentPosition(reference) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
@@ -377,6 +387,49 @@ describe("AmountConfirmation — forma de cobro", () => {
       method: "qr",
       phoneNumber: null,
       concept: "Café de la mañana",
+      numRef: null,
+    });
+  });
+
+  it("la referencia escrita viaja como número y los ceros a la izquierda no cuentan", async () => {
+    const { onConfirm, user } = setup({ initialCents: 15050 });
+    const field = screen.getByLabelText("Referencia");
+    expect(field).toHaveAttribute("maxLength", "7");
+
+    await user.type(field, "0001234");
+    await user.click(confirmButton());
+
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith({
+      cents: 15050,
+      method: "qr",
+      phoneNumber: null,
+      concept: null,
+      numRef: 1234,
+    });
+  });
+
+  it("el enlace oculta concepto y referencia y confirma sin ellos", async () => {
+    const { onConfirm, user } = setup({ initialCents: 15050 });
+    await user.type(screen.getByLabelText("Concepto"), "Mesa 4");
+    await user.type(screen.getByLabelText("Referencia"), "42");
+    await user.click(screen.getByRole("radio", { name: "Enlace" }));
+
+    expect(screen.queryByLabelText("Concepto")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Referencia")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "Código QR" }));
+    expect(screen.getByLabelText("Concepto")).toHaveValue("Mesa 4");
+    expect(screen.getByLabelText("Referencia")).toHaveValue("42");
+
+    await user.click(screen.getByRole("radio", { name: "Enlace" }));
+    await user.click(confirmButton());
+
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith({
+      cents: 15050,
+      method: "link",
+      phoneNumber: null,
+      concept: null,
+      numRef: null,
     });
   });
 
@@ -390,6 +443,7 @@ describe("AmountConfirmation — forma de cobro", () => {
       method: "qr",
       phoneNumber: null,
       concept: null,
+      numRef: null,
     });
   });
 
@@ -408,6 +462,7 @@ describe("AmountConfirmation — forma de cobro", () => {
       method: "link",
       phoneNumber: null,
       concept: null,
+      numRef: null,
     });
   });
 });

@@ -623,6 +623,100 @@ describe("referencia numérica (numRef)", () => {
 
     expect(pey.calls[0].numRef).toBe(555);
   });
+
+  it("usa el número escrito en el QR y lo guarda en el cobro", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const result = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15000,
+      idempotencyKey: newKey(),
+      numRef: 1234,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(pey.calls[0].numRef).toBe(1234);
+    if (!result.ok) return;
+    const [qr] = await db
+      .select()
+      .from(codiQrs)
+      .where(eq(codiQrs.chargeId, result.charge.id));
+    expect(qr.numRef).toBe(1234);
+    const [row] = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.id, result.charge.id));
+    expect(row.requestedNumRef).toBe(1234);
+  });
+
+  it("usa el número escrito en la notificación", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const result = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15000,
+      idempotencyKey: newKey(),
+      method: "pn",
+      phoneNumber: "5512345678",
+      numRef: 77,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(pey.pushCalls[0].numRef).toBe(77);
+    expect(pey.calls).toHaveLength(0);
+    if (!result.ok) return;
+    const [note] = await db
+      .select()
+      .from(codiNotifications)
+      .where(eq(codiNotifications.chargeId, result.charge.id));
+    expect(note.numRef).toBe(77);
+  });
+
+  it("un número vigente no crea otro cobro", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    await createCharge({ db, pey, nextNumRef: () => 4321 }, merchant.id, {
+      amountCents: 15000,
+      idempotencyKey: newKey(),
+    });
+
+    const blocked = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15000,
+      idempotencyKey: newKey(),
+      numRef: 4321,
+    });
+
+    expect(blocked).toEqual({ ok: false, error: "reference_in_use" });
+    expect(pey.calls).toHaveLength(1);
+    const rows = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.merchantId, merchant.id));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("misma clave con otra referencia es un conflicto", async () => {
+    const merchant = await newMerchant();
+    const pey = createMockPeyAdapter();
+    const idempotencyKey = newKey();
+    await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15000,
+      idempotencyKey,
+      numRef: 111,
+    });
+    const conflict = await createCharge({ db, pey }, merchant.id, {
+      amountCents: 15000,
+      idempotencyKey,
+      numRef: 222,
+    });
+
+    expect(conflict).toEqual({ ok: false, error: "idempotency_conflict" });
+    expect(pey.calls).toHaveLength(1);
+    const rows = await db
+      .select()
+      .from(charges)
+      .where(eq(charges.merchantId, merchant.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].requestedNumRef).toBe(111);
+  });
 });
 
 describe("getCharge — alcance por comercio y cobros sin resolver", () => {
@@ -1195,6 +1289,7 @@ describe("createCharge — enlace", () => {
     expect(pey.calls).toHaveLength(0);
     expect(pey.pushCalls).toHaveLength(0);
     expect(pey.linkCalls[0]).not.toHaveProperty("concept");
+    expect(pey.linkCalls[0]).not.toHaveProperty("numRef");
 
     const [row] = await db
       .select()
@@ -1209,7 +1304,7 @@ describe("createCharge — enlace", () => {
     expect(links[0].url).toBe(result.charge.paymentLink?.url);
   });
 
-  it("el enlace guarda el concepto y no lo manda a Pey", async () => {
+  it("el enlace no guarda ni manda concepto ni referencia", async () => {
     const merchant = await newMerchant();
     const pey = createMockPeyAdapter();
     const result = await createCharge({ db, pey }, merchant.id, {
@@ -1217,6 +1312,7 @@ describe("createCharge — enlace", () => {
       idempotencyKey: newKey(),
       method: "link",
       concept: "Mesa 4",
+      numRef: 42,
     });
 
     expect(result.ok).toBe(true);
@@ -1224,11 +1320,14 @@ describe("createCharge — enlace", () => {
     expect(result.charge.reference).toMatch(/^CV-[0-9A-F]{8}$/);
     expect(pey.linkCalls).toHaveLength(1);
     expect(pey.linkCalls[0]).not.toHaveProperty("concept");
+    expect(pey.linkCalls[0]).not.toHaveProperty("numRef");
+    expect(pey.calls).toHaveLength(0);
     const [row] = await db
       .select()
       .from(charges)
       .where(eq(charges.id, result.charge.id));
-    expect(row.concept).toBe("Mesa 4");
+    expect(row.concept).toBeNull();
+    expect(row.requestedNumRef).toBeNull();
   });
 
   it("repetir la misma intención no crea otro enlace; otra forma sí choca", async () => {

@@ -76,6 +76,59 @@ describe("submitCharge", () => {
     ).not.toHaveProperty("concept");
   });
 
+  it("envía la referencia numérica y omite una vacía o inválida", async () => {
+    const fetchMock = respond(201, { charge, replayed: false });
+    await submitCharge({ ...input, numRef: "0001234" }, fetchMock as never);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject(
+      { numRef: 1234 },
+    );
+
+    const empty = respond(201, { charge, replayed: false });
+    await submitCharge({ ...input, numRef: "   " }, empty as never);
+    expect(
+      JSON.parse(empty.mock.calls[0][1].body as string),
+    ).not.toHaveProperty("numRef");
+
+    const invalid = respond(201, { charge, replayed: false });
+    await submitCharge({ ...input, numRef: "12345678" }, invalid as never);
+    expect(
+      JSON.parse(invalid.mock.calls[0][1].body as string),
+    ).not.toHaveProperty("numRef");
+    await submitCharge({ ...input, numRef: "12a" }, invalid as never);
+    expect(
+      JSON.parse(invalid.mock.calls[1][1].body as string),
+    ).not.toHaveProperty("numRef");
+  });
+
+  it("un enlace no manda concepto ni referencia", async () => {
+    const fetchMock = respond(201, { charge, replayed: false });
+    await submitCharge(
+      { ...input, method: "link", concept: "Mesa 4", numRef: 42 },
+      fetchMock as never,
+    );
+    const body = JSON.parse(
+      fetchMock.mock.calls[0][1].body as string,
+    ) as object;
+    expect(body).not.toHaveProperty("concept");
+    expect(body).not.toHaveProperty("numRef");
+  });
+
+  it("409 de referencia en uso no se confunde con un conflicto de idempotencia", async () => {
+    const result = await submitCharge(
+      input,
+      respond(409, {
+        error: {
+          code: "reference_in_use",
+          message: "Esa referencia ya está en un cobro vigente. Elige otra.",
+        },
+      }) as never,
+    );
+    expect(result).toEqual({
+      kind: "error",
+      message: "Esa referencia ya está en un cobro vigente. Elige otra.",
+    });
+  });
+
   it("una repetición (200) se reporta como replayed", async () => {
     const result = await submitCharge(
       input,

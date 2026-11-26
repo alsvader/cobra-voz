@@ -17,3 +17,21 @@ export function chargeReference(chargeId: string): string {
 export function randomNumRef(): number {
   return randomInt(0, MAX_NUM_REF + 1);
 }
+
+/**
+ * Referencia que escribió el comercio. Vacía queda en null. `0001234` es
+ * 1234. Más de 7 dígitos o cualquier carácter que no sea dígito no vale.
+ */
+export function normalizeNumRef(
+  value: string | number | null | undefined,
+): number | null {
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value < 0 || value > MAX_NUM_REF) {
+      return null;
+    }
+    return value;
+  }
+  const trimmed = value?.trim() ?? "";
+  if (!/^[0-9]{1,7}$/.test(trimmed)) return null;
+  return Number(trimmed);
+}

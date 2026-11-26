@@ -14,6 +14,7 @@ import {
 } from "@/modules/charges/amount";
 import { MAX_CONCEPT_LENGTH } from "@/modules/charges/concept";
 import { normalizeMxPhone } from "@/modules/charges/phone";
+import { normalizeNumRef } from "@/modules/charges/reference";
 
 export type CollectionMethod = "qr" | "pn" | "link";
 
@@ -22,6 +23,7 @@ export type ConfirmCharge = {
   method: CollectionMethod;
   phoneNumber: string | null;
   concept: string | null;
+  numRef: number | null;
 };
 
 export type ConfirmResult =
@@ -89,6 +91,7 @@ export function AmountConfirmation({
   const [method, setMethod] = useState<CollectionMethod>("qr");
   const [phoneDraft, setPhoneDraft] = useState("");
   const [conceptDraft, setConceptDraft] = useState("");
+  const [referenceDraft, setReferenceDraft] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
   // Candado síncrono: dos clics seguidos no pueden disparar dos confirmaciones.
   const inFlight = useRef(false);
@@ -103,6 +106,7 @@ export function AmountConfirmation({
     setMethod("qr");
     setPhoneDraft("");
     setConceptDraft("");
+    setReferenceDraft("");
     setFailure(null);
     inFlight.current = false;
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -142,7 +146,8 @@ export function AmountConfirmation({
         cents,
         method,
         phoneNumber: phone,
-        concept: conceptDraft.trim() || null,
+        concept: method === "link" ? null : conceptDraft.trim() || null,
+        numRef: method === "link" ? null : normalizeNumRef(referenceDraft),
       });
       if (result.status === "accepted") {
         setPhase("accepted");
@@ -190,14 +195,32 @@ export function AmountConfirmation({
         />
       ) : null}
 
-      <TextField
-        label="Concepto"
-        hint="Opcional. Tu cliente lo ve en su app."
-        maxLength={MAX_CONCEPT_LENGTH}
-        value={conceptDraft}
-        disabled={locked}
-        onChange={(event) => setConceptDraft(event.target.value)}
-      />
+      {method !== "link" ? (
+        <>
+          <TextField
+            label="Concepto"
+            hint="Opcional. Tu cliente lo ve en su app."
+            maxLength={MAX_CONCEPT_LENGTH}
+            value={conceptDraft}
+            disabled={locked}
+            onChange={(event) => setConceptDraft(event.target.value)}
+          />
+          <TextField
+            label="Referencia"
+            hint="Opcional. Hasta 7 dígitos."
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={7}
+            value={referenceDraft}
+            disabled={locked}
+            onChange={(event) =>
+              setReferenceDraft(
+                event.target.value.replace(/\D/g, "").slice(0, 7),
+              )
+            }
+          />
+        </>
+      ) : null}
 
       <fieldset className="flex flex-col gap-3" disabled={locked}>
         <legend className="text-base font-semibold text-foreground">

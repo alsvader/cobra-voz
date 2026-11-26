@@ -76,6 +76,11 @@ export const charges = pgTable(
      * notificación usan entonces `Cobro CV-…`. No sustituye a la referencia.
      */
     concept: text("concept"),
+    /**
+     * `numRef` que escribió el comercio (0..9 999 999). Null si no escribió
+     * uno: QR y notificación eligen uno libre. El enlace no lo usa.
+     */
+    requestedNumRef: integer("requested_num_ref"),
     ...timestamps,
   },
   (table) => [
@@ -120,6 +125,14 @@ export const charges = pgTable(
     check(
       "charges_concept_length",
       sql`${table.concept} IS NULL OR char_length(${table.concept}) BETWEEN 1 AND 140`,
+    ),
+    check(
+      "charges_requested_num_ref_max_7_digits",
+      sql`${table.requestedNumRef} IS NULL OR ${table.requestedNumRef} BETWEEN 0 AND 9999999`,
+    ),
+    check(
+      "charges_link_has_no_payer_note",
+      sql`${table.collectionMethod} <> 'link' OR (${table.concept} IS NULL AND ${table.requestedNumRef} IS NULL)`,
     ),
   ],
 ).enableRLS();

@@ -1,3 +1,4 @@
+import { normalizeNumRef } from "./reference";
 import type { ChargeDto } from "./types";
 
 /** Clave de idempotencia para UNA intención de cobro (se reutiliza al reintentar). */
@@ -24,6 +25,7 @@ const MESSAGES = {
   unavailable: "El cobro con QR no está disponible por ahora.",
   conflict:
     "Este cobro ya se había enviado con otros datos. Cancela y empieza uno nuevo.",
+  referenceInUse: "Esa referencia ya está en un cobro vigente. Elige otra.",
   invalid: "El importe no es válido. Corrígelo e inténtalo de nuevo.",
   generic: "No pudimos crear el cobro. Inténtalo de nuevo en un momento.",
 } as const;
@@ -41,6 +43,7 @@ export async function submitCharge(
     method?: "qr" | "pn" | "link";
     phoneNumber?: string | null;
     concept?: string | null;
+    numRef?: string | number | null;
   },
   fetchImpl: typeof fetch = fetch,
 ): Promise<SubmitChargeResult> {
@@ -50,6 +53,7 @@ export async function submitCharge(
     method: "qr" | "pn" | "link";
     phoneNumber?: string;
     concept?: string;
+    numRef?: number;
   } = {
     amountCents: input.amountCents,
     idempotencyKey: input.idempotencyKey,
@@ -58,7 +62,11 @@ export async function submitCharge(
   if (payload.method === "pn" && input.phoneNumber) {
     payload.phoneNumber = input.phoneNumber;
   }
-  if (input.concept?.trim()) payload.concept = input.concept.trim();
+  if (payload.method !== "link") {
+    if (input.concept?.trim()) payload.concept = input.concept.trim();
+    const numRef = normalizeNumRef(input.numRef);
+    if (numRef !== null) payload.numRef = numRef;
+  }
   let response: Response;
   try {
     response = await fetchImpl("/api/charges", {
@@ -83,11 +91,22 @@ export async function submitCharge(
     return { kind: "error", message: MESSAGES.generic };
   }
 
+  if (response.status === 409) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: { code?: string };
+    } | null;
+    return {
+      kind: "error",
+      message:
+        body?.error?.code === "reference_in_use"
+          ? MESSAGES.referenceInUse
+          : MESSAGES.conflict,
+    };
+  }
+
   switch (response.status) {
     case 400:
       return { kind: "error", message: MESSAGES.invalid };
-    case 409:
-      return { kind: "error", message: MESSAGES.conflict };
     case 503:
       return { kind: "error", message: MESSAGES.unavailable };
     default:

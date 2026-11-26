@@ -1,0 +1,4 @@
+ALTER TABLE "charges" ADD COLUMN "requested_num_ref" integer;--> statement-breakpoint
+UPDATE "charges" SET "concept" = NULL WHERE "collection_method" = 'link' AND "concept" IS NOT NULL;--> statement-breakpoint
+ALTER TABLE "charges" ADD CONSTRAINT "charges_requested_num_ref_max_7_digits" CHECK ("charges"."requested_num_ref" IS NULL OR "charges"."requested_num_ref" BETWEEN 0 AND 9999999);--> statement-breakpoint
+ALTER TABLE "charges" ADD CONSTRAINT "charges_link_has_no_payer_note" CHECK ("charges"."collection_method" <> 'link' OR ("charges"."concept" IS NULL AND "charges"."requested_num_ref" IS NULL));

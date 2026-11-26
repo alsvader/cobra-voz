@@ -87,6 +87,7 @@ describe("createChargeSchema", () => {
     expect(ok.data.method).toBe("link");
     expect(ok.data.phoneNumber).toBeNull();
     expect(ok.data.concept).toBeNull();
+    expect(ok.data.numRef).toBeNull();
     expect(
       createChargeSchema.safeParse({
         amountCents: 100,
@@ -121,6 +122,56 @@ describe("createChargeSchema", () => {
         concept: "   ",
       }).data?.concept,
     ).toBeNull();
+  });
+
+  it("acepta una referencia de hasta 7 dígitos y rechaza el resto", () => {
+    const padded = createChargeSchema.safeParse({
+      amountCents: 100,
+      idempotencyKey: key,
+      numRef: "0001234",
+    });
+    expect(padded.success).toBe(true);
+    if (!padded.success) return;
+    expect(padded.data.numRef).toBe(1234);
+
+    expect(
+      createChargeSchema.safeParse({
+        amountCents: 100,
+        idempotencyKey: key,
+        numRef: 9_999_999,
+      }).data?.numRef,
+    ).toBe(9_999_999);
+    expect(
+      createChargeSchema.safeParse({
+        amountCents: 100,
+        idempotencyKey: key,
+        numRef: "",
+      }).data?.numRef,
+    ).toBeNull();
+
+    for (const numRef of ["12345678", "12a", 10_000_000, 1.5]) {
+      expect(
+        createChargeSchema.safeParse({
+          amountCents: 100,
+          idempotencyKey: key,
+          numRef,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("un enlace descarta concepto y referencia", () => {
+    const parsed = createChargeSchema.safeParse({
+      amountCents: 100,
+      idempotencyKey: key,
+      method: "link",
+      concept: "Mesa 4",
+      numRef: "42",
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.concept).toBeNull();
+    expect(parsed.data.numRef).toBeNull();
   });
 
   it("rechaza cuerpos que no son objeto", () => {

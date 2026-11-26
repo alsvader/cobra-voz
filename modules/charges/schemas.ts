@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isValidAmountCents } from "./amount";
 import { MAX_CONCEPT_LENGTH, normalizeConcept } from "./concept";
 import { normalizeMxPhone } from "./phone";
+import { normalizeNumRef } from "./reference";
 
 /**
  * Clave de idempotencia por INTENCIÓN de cobro (RN-07): la genera el cliente
@@ -23,15 +24,26 @@ export const createChargeSchema = z
     method: z.enum(["qr", "pn", "link"]).default("qr"),
     phoneNumber: z.string().max(32).optional(),
     concept: z.string().optional(),
+    numRef: z.union([z.string(), z.number()]).optional(),
   })
   .superRefine((value, ctx) => {
-    const concept = value.concept?.trim() ?? "";
-    if (concept.length > MAX_CONCEPT_LENGTH) {
-      ctx.addIssue({
-        code: "custom",
-        message: "El concepto es demasiado largo.",
-        path: ["concept"],
-      });
+    if (value.method !== "link") {
+      const concept = value.concept?.trim() ?? "";
+      if (concept.length > MAX_CONCEPT_LENGTH) {
+        ctx.addIssue({
+          code: "custom",
+          message: "El concepto es demasiado largo.",
+          path: ["concept"],
+        });
+      }
+      const raw = value.numRef == null ? "" : String(value.numRef).trim();
+      if (raw !== "" && normalizeNumRef(value.numRef) === null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "La referencia debe tener hasta 7 dígitos.",
+          path: ["numRef"],
+        });
+      }
     }
     if (value.method === "qr" || value.method === "link") {
       if (value.phoneNumber != null) {
@@ -52,7 +64,10 @@ export const createChargeSchema = z
     }
   })
   .transform((value) => {
-    const concept = normalizeConcept(value.concept);
+    const concept =
+      value.method === "link" ? null : normalizeConcept(value.concept);
+    const numRef =
+      value.method === "link" ? null : normalizeNumRef(value.numRef);
     if (value.method === "qr" || value.method === "link") {
       return {
         amountCents: value.amountCents,
@@ -60,6 +75,7 @@ export const createChargeSchema = z
         method: value.method,
         phoneNumber: null,
         concept,
+        numRef,
       };
     }
     return {
@@ -68,6 +84,7 @@ export const createChargeSchema = z
       method: "pn" as const,
       phoneNumber: normalizeMxPhone(value.phoneNumber ?? "")!,
       concept,
+      numRef,
     };
   });
 

@@ -21,6 +21,7 @@ import { paymentLinkReturnUrls } from "./return-urls";
 import { phoneHash } from "./phone-hash";
 import { normalizeMxPhone, phoneLast4 } from "./phone";
 import {
+  MAX_NUM_REF,
   QR_EXPIRATION_SECONDS,
   chargeReference,
   randomNumRef,
@@ -39,7 +40,10 @@ export type ChargesDeps = {
 export type CreateChargeResult =
   | { ok: true; charge: ChargeDto; replayed: boolean }
   /** La misma clave de idempotencia se usó con otro importe. */
-  | { ok: false; error: "idempotency_conflict" | "merchant_not_found" };
+  | {
+      ok: false;
+      error: "idempotency_conflict" | "reference_in_use" | "merchant_not_found";
+    };
 
 type ChargeRequest = {
   amountCents: number;
@@ -47,6 +51,8 @@ type ChargeRequest = {
   method?: CreateChargeInput["method"];
   phoneNumber?: string | null;
   concept?: string | null;
+  /** Número escrito por el comercio. Null si debe elegirse uno libre. */
+  numRef?: number | null;
 };
 
 /**
@@ -238,29 +244,47 @@ async function settleCharge(
   );
 }
 
+/** Un QR o una notificación todavía vigentes ya usan este `numRef`. */
+async function numRefInUse(
+  deps: ChargesDeps,
+  candidate: number,
+  now: Date,
+): Promise<boolean> {
+  const [qrInUse] = await deps.db
+    .select({ id: codiQrs.id })
+    .from(codiQrs)
+    .where(and(eq(codiQrs.numRef, candidate), gt(codiQrs.expiresAt, now)))
+    .limit(1);
+  if (qrInUse) return true;
+  const [pushInUse] = await deps.db
+    .select({ id: codiNotifications.id })
+    .from(codiNotifications)
+    .where(
+      and(
+        eq(codiNotifications.numRef, candidate),
+        gt(codiNotifications.expiresAt, now),
+      ),
+    )
+    .limit(1);
+  return pushInUse != null;
+}
+
 /** Referencia numérica de Pey sin colisión con QR todavía vigentes. */
 async function pickNumRef(deps: ChargesDeps, now: Date): Promise<number> {
   const next = deps.nextNumRef ?? randomNumRef;
   for (let attempt = 0; attempt < MAX_NUM_REF_ATTEMPTS; attempt++) {
     const candidate = next();
-    const [qrInUse] = await deps.db
-      .select({ id: codiQrs.id })
-      .from(codiQrs)
-      .where(and(eq(codiQrs.numRef, candidate), gt(codiQrs.expiresAt, now)))
-      .limit(1);
-    const [pushInUse] = await deps.db
-      .select({ id: codiNotifications.id })
-      .from(codiNotifications)
-      .where(
-        and(
-          eq(codiNotifications.numRef, candidate),
-          gt(codiNotifications.expiresAt, now),
-        ),
-      )
-      .limit(1);
-    if (!qrInUse && !pushInUse) return candidate;
+    if (!(await numRefInUse(deps, candidate, now))) return candidate;
   }
   throw new Error("No se pudo asignar una referencia numérica libre.");
+}
+
+function storedNumRef(value: number | null | undefined): number | null {
+  if (value == null) return null;
+  if (!Number.isInteger(value) || value < 0 || value > MAX_NUM_REF) {
+    throw new Error("La referencia numérica no es válida.");
+  }
+  return value;
 }
 
 /** Un resultado «created» solo vale si trae id, qrString y una vigencia futura. */
@@ -331,7 +355,8 @@ export async function createCharge(
     );
   }
   const hashedPhone = phone ? phoneHash(phone) : null;
-  const concept = normalizeConcept(input.concept);
+  const concept = method === "link" ? null : normalizeConcept(input.concept);
+  const requestedNumRef = method === "link" ? null : storedNumRef(input.numRef);
 
   const [merchant] = await db
     .select({ peyBankAccountId: merchants.peyBankAccountId })
@@ -339,6 +364,17 @@ export async function createCharge(
     .where(eq(merchants.id, merchantId))
     .limit(1);
   if (!merchant) return { ok: false, error: "merchant_not_found" };
+
+  if (requestedNumRef !== null) {
+    const prior = await loadCharge(
+      db,
+      merchantId,
+      eq(charges.idempotencyKey, input.idempotencyKey),
+    );
+    if (!prior && (await numRefInUse(deps, requestedNumRef, now))) {
+      return { ok: false, error: "reference_in_use" };
+    }
+  }
 
   const [inserted] = await db
     .insert(charges)
@@ -350,6 +386,7 @@ export async function createCharge(
       phoneHash: hashedPhone,
       phoneLast4: phone ? phoneLast4(phone) : null,
       concept,
+      requestedNumRef,
     })
     .onConflictDoNothing({
       target: [charges.merchantId, charges.idempotencyKey],
@@ -372,6 +409,7 @@ export async function createCharge(
       existing.charge.amountCents !== input.amountCents ||
       existingMethod !== method ||
       existing.charge.concept !== concept ||
+      existing.charge.requestedNumRef !== requestedNumRef ||
       (method === "pn" && existing.charge.phoneHash !== hashedPhone)
     ) {
       return { ok: false, error: "idempotency_conflict" };
@@ -385,7 +423,8 @@ export async function createCharge(
   }
 
   // Intención nueva: única llamada a Pey.
-  const numRef = await pickNumRef(deps, now);
+  const numRef =
+    method === "link" ? 0 : (requestedNumRef ?? (await pickNumRef(deps, now)));
   const reference = chargeReference(inserted.id);
 
   let outcome: CreateQrOutcome | CreatePushOutcome | CreatePaymentLinkOutcome;
