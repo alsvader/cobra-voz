@@ -33,6 +33,14 @@ function respond(status: number, body?: unknown) {
   return vi.fn(async () => Response.json(body ?? {}, { status }));
 }
 
+/** `vi.fn` sin parámetros deja `mock.calls` como una tupla vacía. */
+function sentBody(mock: ReturnType<typeof respond>, index = 0): string {
+  const calls = mock.mock.calls as unknown as [string, RequestInit][];
+  const call = calls[index];
+  if (!call) throw new Error("La prueba no llamó a fetch.");
+  return String(call[1].body);
+}
+
 describe("newIdempotencyKey", () => {
   it("genera claves únicas aceptadas por el servidor", () => {
     const keys = new Set(Array.from({ length: 50 }, newIdempotencyKey));
@@ -63,41 +71,29 @@ describe("submitCharge", () => {
   it("incluye el concepto recortado y omite uno vacío", async () => {
     const fetchMock = respond(201, { charge, replayed: false });
     await submitCharge({ ...input, concept: "  Café  " }, fetchMock as never);
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject(
-      {
-        concept: "Café",
-      },
-    );
+    expect(JSON.parse(sentBody(fetchMock))).toMatchObject({
+      concept: "Café",
+    });
 
     const empty = respond(201, { charge, replayed: false });
     await submitCharge({ ...input, concept: "   " }, empty as never);
-    expect(
-      JSON.parse(empty.mock.calls[0][1].body as string),
-    ).not.toHaveProperty("concept");
+    expect(JSON.parse(sentBody(empty))).not.toHaveProperty("concept");
   });
 
   it("envía la referencia numérica y omite una vacía o inválida", async () => {
     const fetchMock = respond(201, { charge, replayed: false });
     await submitCharge({ ...input, numRef: "0001234" }, fetchMock as never);
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject(
-      { numRef: 1234 },
-    );
+    expect(JSON.parse(sentBody(fetchMock))).toMatchObject({ numRef: 1234 });
 
     const empty = respond(201, { charge, replayed: false });
     await submitCharge({ ...input, numRef: "   " }, empty as never);
-    expect(
-      JSON.parse(empty.mock.calls[0][1].body as string),
-    ).not.toHaveProperty("numRef");
+    expect(JSON.parse(sentBody(empty))).not.toHaveProperty("numRef");
 
     const invalid = respond(201, { charge, replayed: false });
     await submitCharge({ ...input, numRef: "12345678" }, invalid as never);
-    expect(
-      JSON.parse(invalid.mock.calls[0][1].body as string),
-    ).not.toHaveProperty("numRef");
+    expect(JSON.parse(sentBody(invalid))).not.toHaveProperty("numRef");
     await submitCharge({ ...input, numRef: "12a" }, invalid as never);
-    expect(
-      JSON.parse(invalid.mock.calls[1][1].body as string),
-    ).not.toHaveProperty("numRef");
+    expect(JSON.parse(sentBody(invalid, 1))).not.toHaveProperty("numRef");
   });
 
   it("un enlace no manda concepto ni referencia", async () => {
@@ -106,9 +102,7 @@ describe("submitCharge", () => {
       { ...input, method: "link", concept: "Mesa 4", numRef: 42 },
       fetchMock as never,
     );
-    const body = JSON.parse(
-      fetchMock.mock.calls[0][1].body as string,
-    ) as object;
+    const body = JSON.parse(sentBody(fetchMock)) as object;
     expect(body).not.toHaveProperty("concept");
     expect(body).not.toHaveProperty("numRef");
   });
